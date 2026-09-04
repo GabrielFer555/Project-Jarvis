@@ -1,5 +1,8 @@
 import re
 
+from agent.brain import generate_reply, init_brain
+from hardware.face import create_face
+
 from .mic import MicSession, beep
 from .stt import load_stt, transcribe
 from .tts import speak
@@ -23,8 +26,11 @@ def run_listen_repeat() -> None:
     ensure_voice("en")
     ensure_voice("pt")
     load_stt()
+    init_brain()
+    face = create_face()
+    face.sleep()
 
-    print("Jarvis pronto. Diga 'Jarvis' e depois a frase para eu repetir.")
+    print("Jarvis pronto. Diga 'Jarvis' e depois a pergunta.")
     print("Ctrl+C para sair.")
 
     with MicSession() as mic:
@@ -40,6 +46,8 @@ def run_listen_repeat() -> None:
             if not heard:
                 continue
 
+            face.listen()
+
             if not command:
                 print("Pode falar.")
                 beep()
@@ -50,12 +58,29 @@ def run_listen_repeat() -> None:
                 )
                 if follow_up.size == 0:
                     print("Nada depois da wake word.")
+                    face.sleep()
                     continue
                 command, language = transcribe(follow_up)
                 command = command.strip()
                 if command:
                     print(f"Ouvi [{language}]: {command}")
 
-            if command:
-                speak(command, language=language)
+            if not command:
+                face.sleep()
+                continue
+
+            face.think()
+            try:
+                reply = generate_reply(command, language=language)
+            except Exception as exc:
+                print(f"Erro na LLM: {exc}")
+                face.sleep()
                 mic.clear()
+                continue
+
+            print(f"Jarvis [{language}]: {reply}")
+            if reply:
+                face.answer()
+                speak(reply, language=language)
+            face.sleep()
+            mic.clear()
