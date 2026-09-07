@@ -4,7 +4,10 @@
 
 - **Branch base:** main
 - **Modo de execução:** non stop
-- **Progresso:** 0/6 etapas
+- **Progresso:** 6/6 etapas
+- **Decisões da execução (Fase 1):**
+  - RF9: `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_DB` continuam obrigatórias na subida mesmo com `DATABASE_URL`. `DATABASE_URL` só vence na montagem da URL. O compose local segue exigindo as três.
+  - RF11: `sair` / `quit` / `exit` localizam a sessão ativa sem criar; se existir (inclusive a da voz), encerram; se não, no-op. Contrato: `get_active_session() -> UUID | None` em `conversation.py` (Etapa 2); o chat texto usa na Etapa 4.
 
 ## Descrição breve da tarefa
 
@@ -43,7 +46,7 @@ Não impactadas: `docs/rosto-do-robo/`, `docs/spec/`.
 
 ## Implementação técnica
 
-### Etapa 1 — Modelos, conexão e migrações
+### Etapa 1 — Modelos, conexão e migrações [Concluído]
 
 `src/memory/models.py` declara o esquema em SQLAlchemy 2.0 declarativo. **Atenção ao nome:** a entidade de domínio "sessão de conversa" colide com a `Session` do SQLAlchemy, que é a unidade de trabalho. A classe de domínio chama-se `ChatSession` (tabela `sessions`); `Session` no código sempre significa a do SQLAlchemy.
 
@@ -162,7 +165,7 @@ Não há chave `version:`: é obsoleta no Compose v2 e só gera aviso.
 
 A imagem é o Postgres puro porque esta task não usa vetores. A task do RAG troca por `pgvector/pgvector:pg17` e cria a extensão numa migração — não é problema desta.
 
-### Etapa 2 — Sessões e janela
+### Etapa 2 — Sessões e janela [Concluído]
 
 `src/memory/conversation.py` com as constantes `HISTORY_MAX_MESSAGES = 40` e `HISTORY_MAX_CHARS = 8000` e as operações abaixo. O tempo de expiração **não** é constante aqui: vem de `load_settings().session_idle_minutes`, lido no momento da consulta.
 
@@ -184,7 +187,7 @@ def build_window(rows, max_messages=HISTORY_MAX_MESSAGES, max_chars=HISTORY_MAX_
 
 A consulta já limita com `order by seq desc limit`, para não trazer a sessão inteira para a memória; `build_window` aplica o teto de caracteres e a fronteira de par sobre o que voltou.
 
-### Etapa 3 — Cérebro com histórico
+### Etapa 3 — Cérebro com histórico [Concluído]
 
 `src/agent/brain.py` troca a montagem por concatenação por uma lista de mensagens LangChain. `_build_prompt` sai; entra a montagem a partir da janela, com `SystemMessage` fora do teto e o envelope reaplicado em cada mensagem de usuário:
 
@@ -199,11 +202,11 @@ A assinatura pública não muda — `generate_reply(text, language="")` continua
 
 O Postgres é a única fonte de verdade da janela; não há cache em memória do histórico. Uma consulta local por turno é irrelevante perto da latência da LLM e evita divergência entre dois estados.
 
-### Etapa 4 — Encerramento manual no chat texto
+### Etapa 4 — Encerramento manual no chat texto [Concluído]
 
 `src/agent/text_chat.py` chama `close_session()` no caminho de `sair` / `quit` / `exit`. Saída por Ctrl+C ou EOF não encerra: a sessão fica aberta e o encerramento preguiçoso da RF3 cuida dela.
 
-### Etapa 5 — Testes
+### Etapa 5 — Testes [Concluído]
 
 `tests/test_brain.py` **quebra** com esta task e precisa ser atualizado: hoje sete testes leem `mock_llm.invoke.call_args[0][0]` como string e fazem `prompt.split("<<<", 1)`. O argumento passa a ser uma lista de mensagens. Os asserts migram para a lista, preservando o que eles protegem: idioma interpolado, fala só na zona delimitada, chaves e injeção como dado, resposta sem raciocínio interno.
 
@@ -213,7 +216,7 @@ O Postgres é a única fonte de verdade da janela; não há cache em memória do
 
 Não usar SQLite em memória como substituto do Postgres nos testes. O dialeto difere em `UUID`, `timestamptz` e `interval`, então o teste passaria sem provar nada sobre o banco real — confiança falsa é pior que ausência de teste.
 
-### Etapa 6 — documentação
+### Etapa 6 — documentação [Concluído]
 
 - `docs/memoria-conversacional/regra-de-negocio.md`: criar — sessão, expiração por inatividade, o que é gravado, janela, exceções.
 - `docs/memoria-conversacional/arquitetura.md`: criar — `src/memory/`, modelos, migrações, contratos, variáveis do Postgres e o `docker-compose.yml`.
@@ -362,16 +365,16 @@ Nenhuma.
 
 ## Documentação
 
-- [ ] README.md — `src/memory/`, `alembic/`, `alembic.ini` e `docker-compose.yml` na estrutura; linha na tabela de Progresso; "O que já funciona"; Como rodar com `docker compose up -d --wait` e `alembic upgrade head`; as variáveis novas do `.env`; novas dependências; Decisões e Próximo passo
-- [ ] docs/progresso.md — seção datada
-- [ ] docs/README.md — índice ganha a linha da memória conversacional; `src/memory/` sai de "Ainda sem documentação"
-- [ ] docs/memoria-conversacional/regra-de-negocio.md — criar
-- [ ] docs/memoria-conversacional/arquitetura.md — criar
-- [ ] docs/cerebro-llm/regra-de-negocio.md — atualizar: turno isolado vira histórico da sessão; sai "Histórico multi-turno" de Fora de escopo; entram as exceções de banco
-- [ ] docs/cerebro-llm/arquitetura.md — atualizar: prompt como lista de mensagens, `src/memory/` nos componentes e dependências, `## Dados` deixa de dizer "Nenhum banco"
-- [ ] docs/chat-texto/regra-de-negocio.md — atualizar: linhas compartilham a sessão, `sair` encerra, Fora de escopo perde histórico e Postgres
-- [ ] docs/chat-texto/arquitetura.md — atualizar: encerramento manual da sessão no fluxo
-- [ ] docs/padroes-de-implementacao.md — atualizar: a decisão "Cérebro sem tools, RAG ou memória" passa a cobrir só tools e RAG; a stack ganha SQLAlchemy ORM + Alembic e Postgres deixa de ser só banco vetorial; Comandos ganham `docker compose up -d --wait` e os do Alembic; convenções registram o Postgres de desenvolvimento em contêiner
+- [x] README.md — `src/memory/`, `alembic/`, `alembic.ini` e `docker-compose.yml` na estrutura; linha na tabela de Progresso; "O que já funciona"; Como rodar com `docker compose up -d --wait` e `alembic upgrade head`; as variáveis novas do `.env`; novas dependências; Decisões e Próximo passo
+- [x] docs/progresso.md — seção datada
+- [x] docs/README.md — índice ganha a linha da memória conversacional; `src/memory/` sai de "Ainda sem documentação"
+- [x] docs/memoria-conversacional/regra-de-negocio.md — criar
+- [x] docs/memoria-conversacional/arquitetura.md — criar
+- [x] docs/cerebro-llm/regra-de-negocio.md — atualizar: turno isolado vira histórico da sessão; sai "Histórico multi-turno" de Fora de escopo; entram as exceções de banco
+- [x] docs/cerebro-llm/arquitetura.md — atualizar: prompt como lista de mensagens, `src/memory/` nos componentes e dependências, `## Dados` deixa de dizer "Nenhum banco"
+- [x] docs/chat-texto/regra-de-negocio.md — atualizar: linhas compartilham a sessão, `sair` encerra, Fora de escopo perde histórico e Postgres
+- [x] docs/chat-texto/arquitetura.md — atualizar: encerramento manual da sessão no fluxo
+- [x] docs/padroes-de-implementacao.md — atualizar: a decisão "Cérebro sem tools, RAG ou memória" passa a cobrir só tools e RAG; a stack ganha SQLAlchemy ORM + Alembic e Postgres deixa de ser só banco vetorial; Comandos ganham `docker compose up -d --wait` e os do Alembic; convenções registram o Postgres de desenvolvimento em contêiner
 - [x] spec/task-memoria-conversacional-008/regra-de-negocio.md — gravado pela spec
 - [x] spec/task-memoria-conversacional-008/arquitetura.md — gravado pela spec
 

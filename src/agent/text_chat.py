@@ -1,3 +1,5 @@
+from memory.conversation import close_session, get_active_session
+
 from .brain import generate_reply, init_brain
 
 _EXIT_COMMANDS = frozenset({"sair", "quit", "exit"})
@@ -15,6 +17,9 @@ def run_text_chat(language: str = "pt") -> None:
         if not texto:
             continue
         if texto.casefold() in _EXIT_COMMANDS:
+            sid = get_active_session()
+            if sid is not None:
+                close_session(sid)
             break
 
         try:

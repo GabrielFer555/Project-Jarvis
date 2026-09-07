@@ -8,8 +8,10 @@ A skill `spec` lê este índice antes de planejar, para decidir se a feature **a
 
 | Funcionalidade | Documentação | Código |
 | --- | --- | --- |
+| API HTTP e healthcheck | [api/](api/regra-de-negocio.md) | `src/api/` |
 | Cérebro LLM | [cerebro-llm/](cerebro-llm/regra-de-negocio.md) | `src/agent/` |
 | Chat texto | [chat-texto/](chat-texto/regra-de-negocio.md) | `src/agent/text_chat.py` |
+| Memória conversacional | [memoria-conversacional/](memoria-conversacional/regra-de-negocio.md) | `src/memory/` |
 | Rosto do robô | [rosto-do-robo/](rosto-do-robo/regra-de-negocio.md) | `src/hardware/face/` |
 | Spec e execução de tasks | [spec/](spec/regra-de-negocio.md) | `.cursor/skills/spec/`, `.cursor/skills/rock-it/` |
 
@@ -30,7 +32,6 @@ Código que existe mas não tem pasta aqui. Uma feature que mexa nestas áreas c
 | --- | --- | --- |
 | Voz (wake word, STT, TTS) | `src/voice/` | Funciona; descrita só no README e no progresso |
 | Locomoção | `src/robot/` | Pacote reservado, ainda vazio |
-| Memória vetorial | `src/memory/` | Pacote reservado, ainda vazio |
 | Visão | `src/vision/` | Pacote reservado, ainda vazio |
 
 ## Registro por task

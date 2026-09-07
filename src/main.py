@@ -1,6 +1,8 @@
 import argparse
 
-from agent import run_text_chat
+from agent.settings import load_settings
+from agent.text_chat import run_text_chat
+from api import start_api
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -8,6 +10,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--text", action="store_true")
     parser.add_argument("--lang", choices=("pt", "en"), default="en")
     args = parser.parse_args(argv)
+
+    load_settings()
+    start_api()
 
     if args.text:
         run_text_chat(language=args.lang)

@@ -26,12 +26,12 @@ Nada fora de `src/memory/` toca SQLAlchemy. O ORM é detalhe interno do pacote; 
 | Modelos | `src/memory/models.py` | `Base`, `ChatSession` e `Message` em SQLAlchemy 2.0 declarativo |
 | Engine e verificação | `src/memory/db.py` | `Engine`, `sessionmaker` e `assert_schema_up_to_date()` |
 | Migrações | `alembic/`, `alembic.ini` | Histórico versionado do esquema, gerado por autogenerate a partir de `Base.metadata` |
-| Sessões e mensagens | `src/memory/conversation.py` | Resolver a sessão ativa, gravar mensagem, carregar a janela, encerrar sessão |
+| Sessões e mensagens | `src/memory/conversation.py` | Resolver a sessão ativa, localizar sem criar (`get_active_session`), gravar mensagem, carregar a janela, encerrar sessão |
 | Recorte da janela | `src/memory/conversation.py` | `build_window`: função pura, sem ORM e sem SQL |
 | Cérebro | `src/agent/brain.py` | Montar a lista de mensagens (system + janela + fala atual) e invocar o `ChatGroq` |
 | Instruções | `src/agent/instructions.md` | Identidade e guardrails, inalterados por esta task |
 | Loop de voz | `src/voice/listen_repeat.py` | Inalterado; segue chamando `generate_reply` |
-| Loop de texto | `src/agent/text_chat.py` | Chama `generate_reply` e encerra a sessão em `sair` / `quit` / `exit` |
+| Loop de texto | `src/agent/text_chat.py` | Chama `generate_reply`; em `sair` / `quit` / `exit` usa `get_active_session` (sem criar) e, se houver, `close_session` |
 | Testes | `tests/test_brain.py`, `tests/test_memory.py` | Contrato do prompt como lista de mensagens e recorte da janela, com banco e LLM mockados |
 
 ## Fluxo
@@ -41,6 +41,7 @@ Nada fora de `src/memory/` toca SQLAlchemy. O ORM é detalhe interno do pacote; 
         │
         ▼
 init_brain()  →  instructions.md + ChatGroq + assert_schema_up_to_date()
+        │            OperationalError → RuntimeError("Postgres inacessível: …")
         │            revisão do banco ≠ head do repo → RuntimeError
         │            (não abre sessão de conversa: ela nasce da primeira fala)
         │
@@ -68,7 +69,9 @@ generate_reply(texto, idioma)
         ├── voz   → Piper speak(resposta, idioma)
         └── texto → print no terminal
                         │
-                        └── 'sair' → close_session(sid) → ended_at = now()
+                        └── 'sair' → get_active_session() → UUID | None
+                                      ├── UUID → close_session(sid) → ended_at = now()
+                                      └── None → no-op (não cria sessão)
 ```
 
 Cada passo numerado abre e fecha a própria `Session` do SQLAlchemy. A unidade de trabalho nunca atravessa o passo 4.
@@ -83,7 +86,9 @@ class Message(Base):      __tablename__ = "messages"
 
 # src/memory/db.py
 def get_engine() -> Engine
-def assert_schema_up_to_date() -> None         # RuntimeError se a revisão do banco ≠ head
+def assert_schema_up_to_date() -> None
+    # OperationalError → RuntimeError("Postgres inacessível: …")
+    # revisão do banco ≠ head → RuntimeError citando alembic upgrade head
 
 # src/memory/conversation.py
 HISTORY_MAX_MESSAGES = 40          # constante; não configurável nesta task
@@ -91,6 +96,7 @@ HISTORY_MAX_CHARS = 8000           # constante; não configurável nesta task
 # o corte de inatividade vem de load_settings().session_idle_minutes
 
 def resolve_session(language: str = "") -> UUID
+def get_active_session() -> UUID | None        # localiza sem criar; None se não houver ativa
 def append_message(session_id: UUID, role: str, content: str, language: str = "") -> None
 def load_window(session_id: UUID) -> list[tuple[str, str]]      # [(role, content)], ordem crescente
 def close_session(session_id: UUID) -> None
@@ -118,7 +124,7 @@ A fronteira do pacote devolve `UUID` e tuplas, não instâncias mapeadas. Objeto
 | `POSTGRES_DB` | Obrigatória. Banco criado pelo contêiner e usado pela conexão |
 | `POSTGRES_HOST` | Opcional, default `localhost` |
 | `POSTGRES_PORT` | Opcional, default `5432`. Vale para a conexão e para a porta publicada pelo contêiner |
-| `DATABASE_URL` | Opcional. URL completa que substitui as cinco acima, para Postgres externo |
+| `DATABASE_URL` | Opcional. Vence as cinco na montagem da URL; `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_DB` continuam obrigatórias na subida |
 | `SESSION_IDLE_MINUTES` | Opcional, default `10`. Minutos de silêncio que expiram a sessão |
 
 As três `POSTGRES_*` obrigatórias são lidas **pelo Compose e pela aplicação no mesmo `.env`**. Não existe senha escrita em dois lugares, e por isso não existe o modo de falha em que trocar a senha do contêiner deixa a aplicação para trás.
@@ -274,7 +280,7 @@ A imagem tem build arm64, então o mesmo arquivo serve no Raspberry Pi. A imagem
 | `${VAR:?mensagem}` no compose | Sem isso o Compose substitui por vazio e sobe um Postgres com credencial em branco |
 | `environment:` em vez de `env_file:` | `env_file` injetaria o `.env` inteiro no contêiner do banco, incluindo `GROQ_API_KEY` |
 | URL montada com `URL.create` em `src/memory/db.py` | Escapa a senha, que f-string não faz; e mantém o SQLAlchemy dentro do pacote, fora de `settings.py` |
-| `DATABASE_URL` opcional, vencendo as partes | Escape hatch para Postgres gerenciado sem obrigar as `POSTGRES_*` a descreverem o que não descrevem |
+| `DATABASE_URL` opcional, vencendo só a montagem da URL | Escape hatch para Postgres gerenciado; as três `POSTGRES_*` obrigatórias continuam exigidas na subida, mesmo com `DATABASE_URL` |
 | `SESSION_IDLE_MINUTES` opcional com default 10 | Um tempo de expiração tem default seguro; uma credencial não. Ausência cai no default, lixo aborta |
 | Postgres em `docker-compose.yml` | Clonar o repositório e rodar não deve exigir instalar banco na máquina; a imagem tem arm64 e serve também no Pi |
 | Volume nomeado no compose | Sem ele, `docker compose down` apagaria a memória do robô |

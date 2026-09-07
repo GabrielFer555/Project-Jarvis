@@ -219,11 +219,33 @@ Canal `--text` no terminal para conversar com o mesmo `generate_reply` e os mesm
 
 Docs vivas em `docs/chat-texto/`. Cérebro atualizado: a entrada também pode ser texto digitado; no modo texto a saída não vai ao Piper. A pasta vazia `spec/task-chat-texto-debug-005/` não foi preenchida; esta execução é a 007.
 
+### Memória conversacional por sessão
+
+O cérebro deixou de tratar cada fala como turno isolado. Fala da pessoa e resposta do Jarvis são gravadas em Postgres (`sessions`, `messages`), agrupadas por sessão. Existe no máximo uma sessão ativa; ela nasce na primeira fala e expira por inatividade (`SESSION_IDLE_MINUTES`, default 10 minutos), com encerramento preguiçoso. O prompt passou a ser lista de mensagens LangChain: `SystemMessage` com `instructions.md` inteiro, depois o histórico da sessão (janela de 40 mensagens / ~8.000 caracteres, alinhada em fala do usuário), com envelope `<<<` `>>>` em cada mensagem de `user`.
+
+`src/memory/` deixou de ser pacote vazio: modelos SQLAlchemy 2.0, `db.py` (URL com `URL.create`, `assert_schema_up_to_date`) e `conversation.py` (`resolve_session`, `get_active_session`, `append_message`, `load_window`, `close_session`, `build_window`). Esquema versionado com Alembic; o programa verifica a revisão na subida e aborta se divergir — não migra sozinho. Postgres de desenvolvimento sobe por `docker-compose.yml` (volume nomeado, porta em `127.0.0.1`, credenciais interpoladas do mesmo `.env`).
+
+`sair` / `quit` / `exit` no `--text` localizam a sessão com `get_active_session()` sem criar; se existir, encerram; senão, no-op. Ctrl+C e EOF não encerram. Voz e texto compartilham a sessão. Falha de persistência no turno tem o mesmo tratamento da falha da Groq. `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_DB` continuam obrigatórias na subida mesmo com `DATABASE_URL`; a URL só vence na montagem. `assert_schema_up_to_date` captura `OperationalError` e relança `RuntimeError("Postgres inacessível: …")`.
+
+Docs vivas em `docs/memoria-conversacional/`. Cérebro, chat texto e padrões atualizados. Decisão da task em `spec/task-memoria-conversacional-008/`.
+
+## 2026-09-07
+
+### Etapa 5 — API HTTP e healthcheck
+
+O Jarvis passou a expor `GET /health` em `127.0.0.1:API_PORT` (default 8080), no mesmo processo dos loops de voz e texto. O endpoint executa os pings de Postgres e Groq, responde 200 somente quando ambos estão disponíveis e responde 503 com o estado independente de cada dependência em caso de falha.
+
+O novo domínio `src/api/` usa `ThreadingHTTPServer` da stdlib, com registro explícito de rotas. A criação, o bind e a ativação acontecem sincronamente antes do despacho do loop; somente `serve_forever()` roda em thread daemon. A API chama `ping()` na fronteira da memória e `ping_groq()` na fronteira do cérebro, sem importar SQLAlchemy, montar `ChatGroq`, validar Alembic no healthcheck ou executar completion.
+
+Documentação viva criada em `docs/api/` e contratos relacionados atualizados em memória, cérebro e fluxo de inicialização do chat texto. Decisão da task em `spec/task-api-healthcheck-010/`.
+
+Gate da etapa: `compileall` concluído e 49 testes `unittest` aprovados.
+
 ## Estado atual
 
-Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal, chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5). Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
+Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal, chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento) e API HTTP local com healthcheck agregado de Postgres e Groq. Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
 
-Pendente: locomoção, LCD no Raspberry Pi, memória vetorial. `src/voice/` funciona mas ainda não tem pasta em `docs/`.
+Pendente: locomoção, LCD no Raspberry Pi, memória vetorial (RAG). `src/voice/` funciona mas ainda não tem pasta em `docs/`.
 
 ## Próximo passo
 

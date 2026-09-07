@@ -13,9 +13,10 @@ texto: stdin     →      LLM →      stdout
 
 | Componente | Módulo | Responsabilidade |
 | --- | --- | --- |
-| Chat texto | `src/agent/text_chat.py` | `init_brain` + loop stdin → `generate_reply` → stdout |
+| Chat texto | `src/agent/text_chat.py` | `init_brain` + loop stdin → `generate_reply` → stdout; `sair` dispara o encerramento |
 | Roteador | `src/main.py` | `--text` / `--lang` ou loop de voz; `voice` só no ramo sem `--text` |
-| Cérebro (inalterado) | `src/agent/brain.py` | Prompt, guardrails, `ChatGroq` |
+| Cérebro | `src/agent/brain.py` | Mesmo contrato público; grava e carrega o histórico via `src/memory/` |
+| Encerramento da sessão | `src/memory/conversation.py` | `get_active_session()` e `close_session()`; o canal não grava histórico |
 | Launch | `.vscode/launch.json` | Configurações `debugpy` do Cursor |
 | Testes | `tests/test_text_chat.py` | Flags, vazio, sair, erro, idioma |
 
@@ -24,18 +25,30 @@ texto: stdin     →      LLM →      stdout
 ```
 py -3.11 src/main.py [--text] [--lang pt|en]
         │
-        ├── sem --text ──► import voice ──► run_listen_repeat()
+        ▼
+load_settings()
         │
-        └── --text
-                │
-                ▼
-        init_brain()     # .env + instructions.md + ChatGroq
+        ▼
+start_api()              # bind síncrono; serve_forever em daemon
+        ├── falha ──────► exceção; nenhum loop começa
+        │
+        ├── sem --text ─► import voice ─► run_listen_repeat()
+        │
+        └── --text ─────► run_text_chat()
+                                │
+                                ▼
+        init_brain()     # instructions.md + ChatGroq + revisão Alembic
+                ├── falha → exceção encerra processo e API; loop não começa
                 │
                 ▼
         loop:
           Você: <linha>
             ├── vazio / espaços     → de novo
-            ├── sair|quit|exit|EOF  → fim
+            ├── sair|quit|exit
+            │     ├── get_active_session()  → UUID | None (não cria)
+            │     ├── se UUID → close_session(sid)
+            │     └── fim
+            ├── EOF / Ctrl+C → fim (sem encerrar sessão)
             └── texto
                   ├── generate_reply(texto, language)
                   └── Jarvis [lang]: <resposta>
@@ -93,7 +106,7 @@ Nenhuma variável de ambiente nova. Continuam `GROQ_API_KEY` e `GROQ_MODEL`.
 
 ## Dados
 
-Nenhum banco. Sem histórico em arquivo. O `.env` já existente.
+O canal não tem banco próprio nem arquivo de histórico. A sessão vive em Postgres via o cérebro (`src/memory/`). O chat só dispara o encerramento manual (`get_active_session` / `close_session`).
 
 ## Dependências
 
@@ -101,7 +114,7 @@ Nenhum banco. Sem histórico em arquivo. O `.env` já existente.
 - LangChain + Groq (cérebro já existente)
 - Extensão Python / `debugpy` no Cursor (não entra em `requirements.txt`)
 - Hugging Face Hub: não usado neste canal
-- Postgres: não usado
+- Histórico: passa pelo cérebro / `src/memory/`; o canal só chama `get_active_session` e `close_session`
 
 ## Decisões
 
