@@ -3,7 +3,8 @@ name: rock-it
 description: >-
   Executa um plano de spec/task-{slug}-{NNN}/plano.md com workflow multi-agent
   (Orquestrador, Product Manager, Dev Implementador, Dev Reviewer, QA),
-  marcando progresso por etapa e rodando build e testes a cada entrega.
+  marcando progresso por etapa, rodando build e testes a cada entrega e
+  atualizando a documentação viva em docs/ conforme o checklist do plano.
   Use when the user pede para executar, implementar ou "rock it" um plano
   existente, ou pede review multi-agent da implementação.
 disable-model-invocation: true
@@ -13,7 +14,7 @@ disable-model-invocation: true
 
 Você é o **Orquestrador**. Não implementa, não revisa e não testa: lê o plano, despacha subagents por persona, cobra os gates e mantém o progresso escrito no arquivo do plano.
 
-O plano vem da skill [spec](.cursor/skills/spec/SKILL.md). Spec **só gera** o `plano.md` e para. Esta skill é a execução dele. Não inventar plano.
+O plano vem da skill [spec](.cursor/skills/spec/SKILL.md). A spec grava `plano.md`, `regra-de-negocio.md` e `arquitetura.md` na pasta da task e para. Esta skill é a execução: código, testes e a documentação viva em `docs/`. Não inventar plano.
 
 ## Quando aplicar
 
@@ -50,7 +51,7 @@ Fase 5  documentação e encerramento
 
 1. Detectar a branch base: `git branch --show-current`.
 2. Localizar o plano: pasta indicada pelo usuário, ou `spec/task-*/plano.md` (slug da solicitação; se houver várias, a de maior `{NNN}`).
-3. Ler o plano por inteiro. Contar o total de etapas (`### Etapa N — ...`).
+3. Ler o plano por inteiro, junto com o `regra-de-negocio.md` e o `arquitetura.md` da mesma pasta (a decisão que a spec registrou). Contar o total de etapas (`### Etapa N — ...`).
 4. Ler o modo de execução no cabeçalho do plano (`non stop` por padrão).
 5. Inserir no cabeçalho do plano, logo abaixo do modo de execução:
 
@@ -58,7 +59,8 @@ Fase 5  documentação e encerramento
 - **Progresso:** 0/N etapas
 ```
 
-6. Ler os padrões vigentes antes do primeiro despacho: `spec/task-{slug}-{NNN}/padroes-de-implementacao.md` quando existir, senão a seção **Stack obrigatória** da skill `spec`.
+6. Ler os padrões vigentes antes do primeiro despacho: [docs/padroes-de-implementacao.md](docs/padroes-de-implementacao.md), arquivo único do projeto. Não existe `padroes-de-implementacao.md` por task; em pastas antigas ele é registro histórico e não vale como padrão.
+7. Ler a documentação viva das funcionalidades que o checklist do plano vai tocar (`docs/<slug>/`), para atualizar o que mudou em vez de reescrever.
 
 ### Fase 1 — Product Manager
 
@@ -102,15 +104,21 @@ Falha encontrada → o Orquestrador convoca uma roda de debate (PM + Dev Impleme
 
 ### Fase 5 — documentação e encerramento
 
-Despachar um Dev Implementador para a etapa de documentação, usando os templates de [.cursor/skills/spec/reference.md](.cursor/skills/spec/reference.md):
+Despachar um Dev Implementador para a etapa de documentação, seguindo o **checklist de Documentação do plano** e os templates de [.cursor/skills/spec/reference.md](.cursor/skills/spec/reference.md):
 
 - [ ] `README.md` (só o que a task mudou)
 - [ ] `docs/progresso.md` (seção datada, sem apagar histórico)
-- [ ] `spec/task-{slug}-{NNN}/regra-de-negocio.md`
-- [ ] `spec/task-{slug}-{NNN}/arquitetura.md`
-- [ ] `spec/task-{slug}-{NNN}/padroes-de-implementacao.md`
+- [ ] `docs/<funcionalidade>/regra-de-negocio.md` e `arquitetura.md` — atualizar as funcionalidades que o plano listou; criar `docs/<nova>/` (mais a linha no índice `docs/README.md`) só quando o plano marcou capacidade nova
+- [ ] `docs/padroes-de-implementacao.md` — só se o plano disser que a task muda um padrão do projeto
 
-Encerrar com o resumo: etapas concluídas, achados do Reviewer e do QA, o que ficou fora de escopo.
+Regras desta fase:
+
+- `regra-de-negocio.md` e `arquitetura.md` da pasta da task **já existem**: foram gravados pela spec no planejamento. Não recriar. A exceção é o plano que veio só do chat, sem a spec: aí gravar os dois aqui, com os templates.
+- Tocar apenas os arquivos de `docs/` listados no checklist. Doc fora do checklist não é modificada, mesmo que pareça desatualizada — isso vira outra task.
+- Atualizar significa mexer na seção afetada. Regra que deixou de valer é substituída, não acumulada ao lado da nova.
+- **Divergência:** se a implementação saiu do que o plano decidiu (achado do Reviewer, falha do QA, decisão nova), corrigir também `spec/task-{slug}-{NNN}/regra-de-negocio.md` e `arquitetura.md`, para o registro da task não mentir. Sem divergência, esses dois arquivos ficam como estão.
+
+Encerrar com o resumo: etapas concluídas, achados do Reviewer e do QA, docs de `docs/` atualizadas ou criadas, o que ficou fora de escopo.
 
 ## Marcação de progresso
 
@@ -134,11 +142,12 @@ Obrigatório antes de marcar qualquer etapa. Este repositório é Python puro, s
 
 ```powershell
 py -3.11 -m compileall src
-py -3.11 -m pytest -q
+py -3.11 -m unittest discover -s tests -v
 ```
 
 - `compileall` é o build: erro de sintaxe ou import quebrado bloqueia a etapa.
-- Sem testes aplicáveis (`tests/` vazio ou pytest ausente), registrar "sem testes aplicáveis" no retorno da etapa em vez de criar teste vazio.
+- Os testes do repositório são `unittest`; `pytest` não é dependência do projeto.
+- Sem testes aplicáveis (`tests/` vazio), registrar "sem testes aplicáveis" no retorno da etapa em vez de criar teste vazio.
 - Teste novo só quando a etapa tiver lógica testável e o cenário não for redundante, conforme a skill `spec`.
 - Gate vermelho é bloqueio: não marcar, não avançar, não pedir aprovação do usuário para pular.
 
@@ -153,6 +162,7 @@ py -3.11 -m pytest -q
 ## Regras herdadas da skill spec
 
 - Escopo fechado: só o que está no plano. Sem refactor, extra ou "melhoria" não pedida.
-- Stack obrigatória sem substituto: Python 3.11, LangChain, modelos da Groq (cérebro, via LangChain); artefatos de voz (Whisper, Piper) podem vir do Hugging Face Hub; Postgres para banco vetorial.
+- Stack obrigatória sem substituto: Python 3.11, LangChain, modelos da Groq (cérebro, via LangChain); artefatos de voz (Whisper, Piper) podem vir do Hugging Face Hub; Postgres para banco vetorial. Detalhe em [docs/padroes-de-implementacao.md](docs/padroes-de-implementacao.md).
 - Interpretador sempre `py -3.11` (neste repo `py` aponta para 3.14).
 - Não criar cenário de teste redundante.
+- Documentação viva em `docs/`: atualizar a funcionalidade mapeada em vez de criar pasta paralela. Na dúvida entre criar e atualizar, atualizar.

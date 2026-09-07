@@ -1,14 +1,29 @@
 # Templates de documentação (skill spec)
 
-Ler este arquivo **somente na Fase 5 da skill rock-it** (documentação). A skill spec não usa estes templates: ela só grava `plano.md`.
+Dois usos:
 
-Atualizar README e `docs/progresso.md`; criar os três arquivos na pasta da task (`spec/task-{slug}-{NNN}/`), junto com o `plano.md` já existente.
+- A skill **spec**, no planejamento, grava `regra-de-negocio.md` e `arquitetura.md` na pasta da task (`spec/task-{slug}-{NNN}/`), junto com o `plano.md`.
+- A skill **rock-it**, na Fase 5, atualiza a documentação viva em `docs/` seguindo o checklist do plano, além de `README.md` e `docs/progresso.md`.
+
+Não existe `padroes-de-implementacao.md` por feature. Os padrões do projeto são o arquivo único `docs/padroes-de-implementacao.md`; o que é contrato da feature vai na seção `## Contratos` do `arquitetura.md`.
 
 `{slug}`: kebab-case da funcionalidade (ex.: `cerebro-llm`, `memoria-vetorial`). `{NNN}`: próximo número sequencial de 3 dígitos (ver skill).
 
+## Atualizar ou criar em `docs/`
+
+| Situação | Decisão |
+| --- | --- |
+| A feature toca funcionalidade já mapeada em `docs/` | Atualizar a pasta existente, por profunda que seja a mudança |
+| Capacidade nova, sem pasta que a cubra | Criar `docs/<nova>/` com os dois arquivos e registrar no índice `docs/README.md` |
+| Funcionalidade não relacionada | Não tocar |
+
+Na dúvida, atualizar. Nunca criar pasta paralela para a mesma funcionalidade (`docs/cerebro-llm/` continua sendo o cérebro, mesmo trocando de provedor).
+
+Ao atualizar, mexer só na seção afetada: a regra que mudou, o componente novo, a dependência que saiu. Não reescrever o documento inteiro nem apagar decisão anterior que continua valendo. Regra que deixou de valer é **substituída**, não acumulada ao lado da nova.
+
 ## README.md
 
-Atualizar só o que a task mudou: tabela de Progresso, “O que já funciona”, Como rodar, estrutura de pastas, próximo passo. Não reescrever o documento inteiro.
+Atualizar só o que a task mudou: tabela de Progresso, "O que já funciona", Como rodar, estrutura de pastas, Decisões, próximo passo. Não reescrever o documento inteiro.
 
 ## docs/progresso.md
 
@@ -16,7 +31,19 @@ Acrescentar seção datada no mesmo estilo existente (`## AAAA-MM-DD`, `### Etap
 
 Não apagar histórico anterior.
 
-## spec/task-{slug}-{NNN}/regra-de-negocio.md
+## docs/README.md (índice)
+
+Só muda quando entra funcionalidade nova. Uma linha por funcionalidade mapeada:
+
+```markdown
+| Funcionalidade | Documentação | Código |
+| --- | --- | --- |
+| <nome> | [docs/<slug>/](<slug>/regra-de-negocio.md) | `src/<pacote>/` |
+```
+
+## regra-de-negocio.md
+
+Na pasta da task (spec, no planejamento) e em `docs/<slug>/` (rock-it, na execução). Na task, o documento descreve a decisão daquela feature; em `docs/`, descreve a funcionalidade inteira como ela passa a ser.
 
 ```markdown
 # Regra de negócio — <funcionalidade>
@@ -28,6 +55,14 @@ Não apagar histórico anterior.
 ## Comportamento
 
 - ...
+
+## Impacto nas regras existentes
+
+| Doc afetada | Regra vigente | Passa a valer |
+| --- | --- | --- |
+| `docs/<slug>/regra-de-negocio.md` | ... | ... |
+
+<Somente na pasta da task. Se nada muda em funcionalidade mapeada: `Nenhuma; funcionalidade nova.`>
 
 ## Entradas e saídas
 
@@ -44,9 +79,9 @@ Não apagar histórico anterior.
 - ...
 ```
 
-## spec/task-{slug}-{NNN}/arquitetura.md
+## arquitetura.md
 
-```markdown
+~~~markdown
 # Arquitetura — <funcionalidade>
 
 ## Contexto
@@ -65,6 +100,18 @@ Não apagar histórico anterior.
 <diagrama texto>
 ```
 
+## Contratos
+
+<assinaturas, variáveis de ambiente, eventos — só o que esta funcionalidade expõe>
+
+```python
+def exemplo(...) -> ...
+```
+
+| Chave | Papel |
+| --- | --- |
+| `VAR_DE_AMBIENTE` | ... |
+
 ## Dados
 
 <Postgres / vetores / arquivos / cache — só o que a task usa>
@@ -76,29 +123,12 @@ Não apagar histórico anterior.
 - Groq (cérebro: `GROQ_MODEL`)
 - Hugging Face Hub (artefatos STT/TTS, se aplicável)
 - Postgres (se aplicável)
-```
-
-## spec/task-{slug}-{NNN}/padroes-de-implementacao.md
-
-```markdown
-# Padrões de implementação — <funcionalidade>
-
-## Convenções
-
-- Interpretador: `py -3.11`
-- Sem dependências fora da stack obrigatória da task
-
-## Contratos
-
-<funções, assinaturas, eventos — só o introduzido nesta task>
-
-## Testes
-
-<o que cobrir ou “não aplicável”>
 
 ## Decisões
 
 | Decisão | Motivo |
 | --- | --- |
 | ... | ... |
-```
+
+<Só decisões desta funcionalidade. Padrão que vale para o projeto inteiro vai em `docs/padroes-de-implementacao.md`.>
+~~~

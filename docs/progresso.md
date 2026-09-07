@@ -174,11 +174,56 @@ A stack das skills spec/rock-it e de `docs/spec/` deixa de exigir Hugging Face c
 
 Docs da feature em `spec/task-cerebro-groq-004/`. `docs/cerebro-llm/` não foi migrado. `.env` e a chave real não entram no git.
 
+## 2026-09-06
+
+### Docs vivas e documentação no planejamento
+
+A documentação da feature deixou de ser um subproduto do fim da execução. A skill spec agora grava três arquivos na pasta da task — `plano.md`, `regra-de-negocio.md` e `arquitetura.md` — porque regra e arquitetura são o que o plano decide. O que a spec continua sem fazer é mexer em `docs/`: ela **planeja** essas mudanças, com caminho e conteúdo, e o rock-it as escreve.
+
+`docs/` passou a ser a fonte viva e canônica de cada funcionalidade; a pasta da task é o registro daquela decisão, congelado no tempo. Divergindo, vale `docs/`.
+
+Antes de escrever, a spec inventaria `docs/` (índice, docs afetadas, padrões) e classifica o impacto:
+
+| Situação | Decisão |
+| --- | --- |
+| Toca funcionalidade já mapeada | Atualizar a pasta existente, por profunda que seja a mudança |
+| Capacidade nova | Criar `docs/<nova>/` e registrar no índice |
+| Não relacionada | Não tocar; listar como não impactada |
+
+Trocar a tecnologia não cria funcionalidade nova: o cérebro saiu do Hugging Face para a Groq e continua sendo `docs/cerebro-llm/`. O checklist de documentação do plano passou a ter caminho concreto e o que muda em cada arquivo, em vez de "atualizar a documentação".
+
+O `padroes-de-implementacao.md` por feature acabou: repetia `py -3.11` e a mesma stack em toda task. Os três foram consolidados em `docs/padroes-de-implementacao.md`, arquivo único do projeto. O que era contrato da feature (assinaturas, variáveis de ambiente) foi para a nova seção `## Contratos` do `arquitetura.md` de cada funcionalidade, e as decisões locais para `## Decisões`.
+
+| Arquivo | Mudança |
+| --- | --- |
+| `.cursor/skills/spec/SKILL.md` | Fase de inventário e impacto; grava três arquivos; proíbe editar `docs/` |
+| `.cursor/skills/spec/reference.md` | Sai o template de padrões; entram Impacto, Contratos, Decisões e o índice |
+| `.cursor/skills/rock-it/SKILL.md` | Fase 0 lê o padrões global; Fase 5 segue o checklist e não recria a decisão da task |
+| `docs/padroes-de-implementacao.md` | Novo: padrões, stack, comandos e decisões do projeto |
+| `docs/README.md` | Novo: índice funcionalidade → documentação → código |
+| `docs/spec/`, `docs/cerebro-llm/`, `docs/rosto-do-robo/` | Atualizados; `padroes-de-implementacao.md` removido das três |
+
+### Problemas encontrados
+
+1. **Doc canônica desatualizada.** `docs/cerebro-llm/` ainda descrevia `HuggingFaceEndpoint`, `HF_TOKEN` e `HF_MODEL`, embora o cérebro tenha ido para a Groq na task 004. Como `docs/` passou a ser canônico, a próxima feature do cérebro partiria de premissa errada. Regra e arquitetura foram reconciliadas com o código real (Groq, `instructions.md`, fala entre `<<<` e `>>>`).
+
+2. **Gate com a ferramenta errada.** O rock-it mandava rodar `py -3.11 -m pytest -q`, mas `pytest` não está no `requirements.txt` e os testes são `unittest`. O gate passou a ser `py -3.11 -m compileall src` + `py -3.11 -m unittest discover -s tests -v`, igual ao README.
+
+Docs desta mudança em `spec/task-spec-docs-vivas-006/`. O plano da task 005, ainda não executado, teve o checklist alinhado ao contrato novo.
+
+### Chat por texto e debug no Cursor
+
+Canal `--text` no terminal para conversar com o mesmo `generate_reply` e os mesmos guardrails, sem microfone, Whisper, Piper nem rosto. Idioma por `--lang pt|en` (padrão `pt`). Encerrar com `sair` / `quit` / `exit` ou Ctrl+C. Linha vazia não chama a LLM. Falha da Groq imprime o erro e o loop continua.
+
+`src/main.py` roteia com `argparse`. No modo `--text`, `voice` é import preguiçoso: só entra no ramo sem `--text`, para o chat não carregar áudio. `.vscode/launch.json` tem `Jarvis: chat texto` e `Jarvis: voz` (`debugpy`, terminal integrado). Testes em `tests/test_text_chat.py` (25 no repositório).
+
+Docs vivas em `docs/chat-texto/`. Cérebro atualizado: a entrada também pode ser texto digitado; no modo texto a saída não vai ao Piper. A pasta vazia `spec/task-chat-texto-debug-005/` não foi preenchida; esta execução é a 007.
+
 ## Estado atual
 
-Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal.
+Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal, chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5). Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
 
-Pendente: locomoção, LCD no Raspberry Pi, memória vetorial.
+Pendente: locomoção, LCD no Raspberry Pi, memória vetorial. `src/voice/` funciona mas ainda não tem pasta em `docs/`.
 
 ## Próximo passo
 

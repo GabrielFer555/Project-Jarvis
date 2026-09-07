@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Jarvis: chat texto",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/main.py",
+      "args": ["--text"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "python": "C:\\Users\\GABRIEL\\AppData\\Local\\Python\\pythoncore-3.11-64\\python.exe"
+    },
+    {
+      "name": "Jarvis: voz",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/main.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "python": "C:\\Users\\GABRIEL\\AppData\\Local\\Python\\pythoncore-3.11-64\\python.exe"
+    }
+  ]
+}

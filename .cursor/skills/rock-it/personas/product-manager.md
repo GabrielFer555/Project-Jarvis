@@ -15,6 +15,7 @@ Tarefa:
 1. Leia o plano inteiro, com foco na seção "Requisitos funcionais".
 2. Confronte cada requisito com o resto do plano (descrição, etapas técnicas, Gherkin, fora de escopo) e com o que já existe em src/ e docs/.
 3. Aponte inconsistências: requisito ambíguo, contraditório, sem etapa que o implemente, etapa sem requisito que a justifique, requisito que colide com o que já existe ou com o "fora de escopo".
+4. Confira a seção "Impacto nas funcionalidades mapeadas" e o checklist de documentação contra docs/: a regra vigente citada é a que está em docs/<funcionalidade>/, o plano atualiza a funcionalidade existente em vez de criar pasta paralela, e nenhuma doc não relacionada entrou no checklist.
 
 Não proponha features novas. Não sugira melhorias de escopo. Não altere arquivo nenhum.
 

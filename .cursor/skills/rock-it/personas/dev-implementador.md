@@ -19,7 +19,8 @@ Você é desenvolvedor Python implementando UMA etapa de um plano de execução.
 Plano: <caminho>/spec/task-<slug>-<NNN>/plano.md
 Etapa alvo: Etapa <N> — <nome>
 Repositório: <caminho absoluto do repo>
-Padrões de implementação: <spec/task-<slug>-<NNN>/padroes-de-implementacao.md ou "seguir a stack obrigatória abaixo">
+Decisão da task (contexto): spec/task-<slug>-<NNN>/regra-de-negocio.md e arquitetura.md
+Padrões de implementação: docs/padroes-de-implementacao.md (arquivo único do projeto)
 
 Stack obrigatória, sem substituto equivalente:
 - Python 3.11, sempre invocado como `py -3.11` (neste repo `py` sem versão aponta para 3.14)
@@ -31,9 +32,10 @@ Tarefa:
 1. Leia o plano e implemente SOMENTE a Etapa <N>. Nada de outras etapas, refactor, extra ou "melhoria".
 2. Rode o gate e só siga se passar:
    py -3.11 -m compileall src
-   py -3.11 -m pytest -q
-   Sem testes aplicáveis (tests/ vazio ou pytest ausente), registre "sem testes aplicáveis" em vez de criar teste vazio.
+   py -3.11 -m unittest discover -s tests -v
+   Os testes do repositório são unittest; pytest não é dependência. Sem testes aplicáveis (tests/ vazio), registre "sem testes aplicáveis" em vez de criar teste vazio.
 3. Teste novo só se a etapa tiver lógica testável e o cenário não for redundante.
+   Se a etapa for a de documentação, siga o checklist de Documentação do plano: atualize só os arquivos listados, mexendo apenas no que a task mudou. Doc de docs/ fora do checklist não é tocada.
 4. Gate verde → edite o arquivo do plano:
    - marque o título da etapa como "### Etapa <N> — <nome> [Concluído]"
    - atualize "- **Progresso:** <N>/<total> etapas" no cabeçalho
@@ -43,7 +45,7 @@ Se faltar dado sem o qual a implementação vira adivinhação (API, hardware, r
 
 Retorne:
 - Arquivos criados ou alterados, com uma linha de descrição cada
-- Saída resumida do gate (compileall e pytest)
+- Saída resumida do gate (compileall e unittest)
 - Status: "Etapa <N> concluída e marcada" ou "Bloqueado: <dúvida impeditiva>"
 - O que ficou fora do escopo desta etapa
 ```
@@ -62,7 +64,7 @@ Tarefa:
 1. Verifique o achado no código e no plano. Julgue pela evidência, não pela autoridade de quem apontou.
 2. Decida: procede, não procede, ou procede parcialmente.
 3. Se procede: corrija apenas o que o achado cobre, rode o gate
-   (py -3.11 -m compileall src ; py -3.11 -m pytest -q)
+   (py -3.11 -m compileall src ; py -3.11 -m unittest discover -s tests -v)
    e marque a etapa afetada do plano como "[Reaberto]" enquanto não houver nova aprovação.
 4. Se não procede: não altere nada e justifique com arquivo, linha ou requisito.
 

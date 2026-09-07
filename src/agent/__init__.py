@@ -2,5 +2,7 @@
 
 from .brain import generate_reply, init_brain
 from .settings import Settings, load_settings
+from .text_chat import run_text_chat
 
-__all__ = ["Settings", "generate_reply", "init_brain", "load_settings"]
+__all__ = ["Settings", "generate_reply", "init_brain", "load_settings", "run_text_chat"]
+

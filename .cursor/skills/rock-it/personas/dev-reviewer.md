@@ -14,7 +14,7 @@ Escopo do review: <diff, branch ou lista de arquivos alterados>
 Verifique, nesta ordem:
 1. Requisitos funcionais do plano atendidos pela implementação.
 2. Segurança conforme ISO/IEC 27001 (controles) e ISO/IEC 25010 (qualidade): segredo ou credencial em código, entrada não validada, caminho de arquivo e comando montados a partir de entrada externa, desserialização e carga de modelo de origem não confiável, log com dado sensível, dependência sem pin, tratamento de erro que engole falha, concorrência e acesso a recurso de hardware.
-3. Padrões de implementação do repositório (spec/task-<slug>-<NNN>/padroes-de-implementacao.md e a stack obrigatória: Python 3.11 via `py -3.11`, LangChain, Groq no cérebro, Hugging Face Hub só para artefatos STT/TTS, Postgres para vetores).
+3. Padrões de implementação do repositório (docs/padroes-de-implementacao.md, arquivo único: Python 3.11 via `py -3.11`, LangChain, Groq no cérebro, Hugging Face Hub só para artefatos STT/TTS, Postgres para vetores).
 4. Boas práticas de código Python: responsabilidade única, nomes, contratos e tipos, ausência de código morto, ausência de duplicação, testes com assert útil.
 
 Review é leitura: não altere arquivo nenhum. Não aponte preferência de estilo.

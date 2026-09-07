@@ -15,7 +15,7 @@ Tarefa:
 2. Para cada um, localize no código onde é atendido e dê veredito: Atendido, Parcial ou Não atendido.
 3. Execute o que for executável para sustentar o veredito:
    py -3.11 -m compileall src
-   py -3.11 -m pytest -q
+   py -3.11 -m unittest discover -s tests -v
 4. Valide também o que o plano declarou em "Fora de escopo": nada além disso deve ter sido implementado.
 
 Valide o que o plano pediu, não o que você faria diferente. Não altere arquivo nenhum, exceto se o plano previr criação de teste e o Orquestrador tiver pedido.
