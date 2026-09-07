@@ -8,6 +8,7 @@ from uuid import uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import main
+from agent.brain import Reply
 from agent.text_chat import run_text_chat
 
 
@@ -66,18 +67,34 @@ class TextChatTests(unittest.TestCase):
                     self.mock_close_session.assert_not_called()
 
     def test_message_calls_generate_reply_with_text_and_language(self) -> None:
-        self.mock_generate_reply.return_value = "resposta"
+        self.mock_generate_reply.return_value = Reply(spoken="resposta")
         with patch("builtins.input", side_effect=["olá jarvis", "sair"]):
             with patch("sys.stdout", new_callable=StringIO) as stdout:
                 run_text_chat()
         self.mock_init_brain.assert_called_once()
         self.mock_generate_reply.assert_called_once_with("olá jarvis", language="pt")
-        self.assertIn("Jarvis [pt]: resposta", stdout.getvalue())
+        output = stdout.getvalue()
+        self.assertIn("Jarvis [pt]: resposta", output)
+        self.assertNotIn("Raciocínio:", output)
+
+    def test_message_prints_reasoning_block_before_spoken(self) -> None:
+        self.mock_generate_reply.return_value = Reply(
+            spoken="resposta falada",
+            reasoning="pensei nisto",
+        )
+        with patch("builtins.input", side_effect=["olá jarvis", "sair"]):
+            with patch("sys.stdout", new_callable=StringIO) as stdout:
+                run_text_chat()
+        output = stdout.getvalue()
+        self.assertIn("Raciocínio:", output)
+        self.assertIn("pensei nisto", output)
+        self.assertIn("Jarvis [pt]: resposta falada", output)
+        self.assertLess(output.index("Raciocínio:"), output.index("Jarvis [pt]:"))
 
     def test_llm_failure_prints_and_next_turn_runs(self) -> None:
         self.mock_generate_reply.side_effect = [
             RuntimeError("groq indisponivel"),
-            "tudo certo",
+            Reply(spoken="tudo certo"),
         ]
         with patch("builtins.input", side_effect=["primeira", "segunda", "sair"]):
             with patch("sys.stdout", new_callable=StringIO) as stdout:
@@ -138,12 +155,12 @@ class MainRoutingTests(unittest.TestCase):
         self.mock_voice.run_listen_repeat.assert_called_once_with()
         self.mock_text_chat.assert_not_called()
 
-    def test_main_text_dispatches_chat_with_pt(self) -> None:
+    def test_main_text_dispatches_chat_with_en(self) -> None:
         main.main(["--text"])
         self.assertEqual(self.events, ["load_settings", "start_api", "flow"])
         self.mock_load_settings.assert_called_once_with()
         self.mock_start_api.assert_called_once_with()
-        self.mock_text_chat.assert_called_once_with(language="pt")
+        self.mock_text_chat.assert_called_once_with(language="en")
         self.mock_voice.run_listen_repeat.assert_not_called()
 
     def test_main_text_lang_en_passes_en(self) -> None:

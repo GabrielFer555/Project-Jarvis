@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -17,6 +18,12 @@ GROQ_USER_AGENT = "Jarvis/1.0"
 _llm: ChatGroq | None = None
 _settings: Settings | None = None
 _instructions: str | None = None
+
+
+@dataclass(frozen=True)
+class Reply:
+    spoken: str
+    reasoning: str | None = None
 
 
 def _language_name(language: str) -> str:
@@ -55,7 +62,8 @@ def init_brain() -> Settings:
         model=_settings.model,
         api_key=_settings.token,
         temperature=0.7,
-        max_tokens=128
+        max_tokens=1024,
+        model_kwargs={"include_reasoning": True},
     )
     return _settings
 
@@ -81,8 +89,8 @@ def ping_groq() -> None:
         raise RuntimeError("Groq inacessível")
 
 
-def generate_reply(text: str, language: str = "") -> str:
-    """Send the transcribed phrase to the LLM and return spoken-ready text.
+def generate_reply(text: str, language: str = "") -> Reply:
+    """Send the transcribed phrase to the LLM and return spoken text plus optional reasoning.
 
     No tools or RAG — a single invoke with the session window from Postgres.
     """
@@ -104,9 +112,16 @@ def generate_reply(text: str, language: str = "") -> str:
             messages.append(AIMessage(content=content))
     raw = _llm.invoke(messages)
     if hasattr(raw, "content") and raw.content is not None:
-        spoken = str(raw.content)
+        spoken = str(raw.content).strip()
     else:
-        spoken = str(raw)
-    spoken = spoken.strip()
-    append_message(sid, "assistant", spoken, language)
-    return spoken
+        spoken = ""
+    additional = getattr(raw, "additional_kwargs", None)
+    raw_reasoning = (
+        additional.get("reasoning_content") if isinstance(additional, dict) else None
+    )
+    if isinstance(raw_reasoning, str) and raw_reasoning.strip():
+        reasoning = raw_reasoning.strip()
+    else:
+        reasoning = None
+    append_message(sid, "assistant", spoken, language, reasoning=reasoning)
+    return Reply(spoken=spoken, reasoning=reasoning)

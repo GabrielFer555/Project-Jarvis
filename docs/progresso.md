@@ -241,9 +241,23 @@ Documentação viva criada em `docs/api/` e contratos relacionados atualizados e
 
 Gate da etapa: `compileall` concluído e 49 testes `unittest` aprovados.
 
+### Raciocínio da Groq visível no `--text` e persistido
+
+O cérebro passou a pedir o raciocínio interno à Groq (`include_reasoning=True`, `max_tokens=1024`) e a devolver `Reply(spoken, reasoning)` em vez de `str`. O modo `--text` imprime o bloco `Raciocínio:` antes da linha `Jarvis [lang]:` quando a Groq mandar o campo; o Piper e a linha do terminal de voz usam só `spoken`.
+
+A mensagem `assistant` em `messages.content` continua sendo só o texto falável. O raciocínio vai para a tabela `reasonings` (migração `20260907_0002`), 1:1 opcional com essa mensagem. `load_window` não lê `reasonings`. A fala `user` nunca gera linha nessa tabela.
+
+Documentação viva atualizada em `docs/cerebro-llm/`, `docs/chat-texto/` e `docs/memoria-conversacional/`. Decisão da task em `spec/task-raciocinio-groq-011/`.
+
+Gate da etapa: `compileall` concluído e 56 testes `unittest` aprovados.
+
+### Problemas e correções
+
+1. **Gate da Etapa 1 vermelho por `--lang`.** Um teste pré-existente esperava o default `pt` do chat texto. O argparse do `main.py` já estava com default `en` (decisão do usuário, fora do RF desta task). O teste foi alinhado ao default `en`; o default documentado do `run_text_chat(language="pt")` e das docs de chat texto não mudou.
+
 ## Estado atual
 
-Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal, chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento) e API HTTP local com healthcheck agregado de Postgres e Groq. Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
+Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal, chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento), API HTTP local com healthcheck agregado de Postgres e Groq, e raciocínio da Groq visível no `--text` e gravado em `reasonings`. Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
 
 Pendente: locomoção, LCD no Raspberry Pi, memória vetorial (RAG). `src/voice/` funciona mas ainda não tem pasta em `docs/`.
 

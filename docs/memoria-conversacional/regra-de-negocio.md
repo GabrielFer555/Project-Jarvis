@@ -22,9 +22,11 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 ### Mensagens
 
 - Toda fala da pessoa e toda resposta do Jarvis são gravadas **no instante em que acontecem**, com papel (`user` ou `assistant`), ordem dentro da sessão e idioma.
-- A fala da pessoa é gravada e **comitada antes** de a LLM ser chamada. Se a chamada falhar, a fala permanece registrada sem resposta correspondente; nenhum placeholder é gravado no lugar da resposta que não veio.
+- A fala da pessoa é gravada e **comitada antes** de a LLM ser chamada. Se a chamada falhar, a fala permanece registrada sem resposta correspondente; nenhum placeholder é gravado no lugar da resposta que não veio; também não nasce linha em `reasonings`.
+- A mensagem `assistant` em `messages.content` é só o texto falável (`spoken`). O raciocínio da Groq, quando existir, vai para a tabela `reasonings`, 1:1 com essa mensagem via `message_id` único. Fala `user` nunca tem linha em `reasonings`. Se a Groq não mandar raciocínio, a assistant é gravada sem linha nessa tabela.
+- A assistant e o eventual `reasonings` entram no **mesmo commit**.
 - Mensagem gravada não é editada. Um turno já dito é registro histórico.
-- O que vai para o banco é o conteúdo cru: a transcrição do Whisper ou a linha digitada, sem os delimitadores do prompt.
+- O que vai para o banco em `messages` é o conteúdo cru: a transcrição do Whisper, a linha digitada ou o `spoken` da LLM, sem os delimitadores do prompt.
 
 ### Janela enviada à LLM
 
@@ -33,6 +35,7 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 - A janela é limitada a **40 mensagens** e cerca de **8.000 caracteres**. O que passa disso fica no banco, mas não vai para a LLM.
 - Ao cortar, o corte avança até a próxima fala da pessoa. A janela nunca começa numa resposta do Jarvis sem a pergunta que a originou.
 - Toda fala da pessoa reidratada do banco volta ao prompt **dentro do envelope `<<<` `>>>`**, igual à fala atual.
+- `load_window` lê só `(role, content)` de `messages`. A tabela `reasonings` **não** entra no join nem no prompt: o raciocínio persistido não volta para a LLM no turno seguinte.
 - Nenhuma tool, RAG ou busca por similaridade entra no caminho. O histórico é carregado por consulta direta à sessão ativa; a LLM não consulta o banco.
 
 ### Healthcheck de conexão
@@ -47,8 +50,9 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 | --- | --- | --- | --- |
 | Frase depois da wake word | STT (Whisper) | Mensagem `user` gravada | Postgres (`messages`) |
 | Linha digitada (modo `--text`) | stdin | Mensagem `user` gravada | Postgres (`messages`) |
-| Resposta da LLM | Groq | Mensagem `assistant` gravada | Postgres (`messages`) |
-| Sessão ativa e histórico | Postgres (`sessions`, `messages`) | Lista de mensagens do prompt | LLM na Groq |
+| Resposta da LLM | Groq | Mensagem `assistant` gravada (`spoken`) | Postgres (`messages`) |
+| Raciocínio da LLM (se houver) | Groq | Linha 1:1 com a mensagem `assistant` | Postgres (`reasonings`) |
+| Sessão ativa e histórico | Postgres (`sessions`, `messages`) | Lista de mensagens do prompt (sem `reasonings`) | LLM na Groq |
 | Idioma (`pt` / `en`) | Whisper (voz) ou `--lang` (texto) | Idioma da mensagem e da sessão | Postgres e prompt |
 | `sair` / `quit` / `exit` | stdin | `get_active_session()` → se UUID, `close_session`; senão no-op | Postgres (`sessions.ended_at`) |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `.env` (obrigatórias, mesmo com `DATABASE_URL`) | Credenciais do contêiner **e** da aplicação | Docker Compose e `src/memory/db.py` |
@@ -68,7 +72,8 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 - `SESSION_IDLE_MINUTES` com valor não inteiro ou menor ou igual a zero: `RuntimeError` na subida, citando a variável e o valor recebido. Ausente ou vazia **não** é erro: cai no default de 10 minutos.
 - Esquema desatualizado na subida: se a revisão aplicada no banco for diferente da última migração do repositório, `RuntimeError` instruindo a rodar `alembic upgrade head`. O programa nunca migra sozinho.
 - Falha do Postgres durante um turno: mensagem no terminal, o rosto volta a Sleeping, nada é falado e o loop aguarda a wake word de novo. É o mesmo tratamento que a falha da Groq já recebe. Sem persistência, não há conversa.
-- Falha da LLM depois da fala gravada: a mensagem da pessoa fica no banco sem resposta. O turno seguinte carrega essa fala como parte do histórico.
+- Falha da LLM depois da fala gravada: a mensagem da pessoa fica no banco sem resposta e sem linha em `reasonings`. O turno seguinte carrega essa fala como parte do histórico.
+- `append_message` com `reasoning` preenchido e papel que não é `assistant`: `RuntimeError` (a fala da pessoa não tem raciocínio da LLM).
 - Sessão ativa não encontrada: não é erro. A fala abre uma sessão nova (`resolve_session`). `get_active_session` devolve `None` e o `sair` não cria sessão.
 
 ## Fora de escopo

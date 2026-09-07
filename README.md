@@ -41,7 +41,7 @@ project-jarvis/
 │   ├── hardware/
 │   │   └── face/               # rosto: ABC, terminal, LCD (TODO)
 │   ├── vision/                 # câmera e percepção — ainda vazio
-│   ├── memory/                 # sessões e mensagens (Postgres)
+│   ├── memory/                 # sessões, mensagens e raciocínios (Postgres)
 │   │   ├── models.py
 │   │   ├── db.py
 │   │   └── conversation.py
@@ -80,6 +80,7 @@ project-jarvis/
 | Chat texto (debug) | Feito | `--text` no terminal; F5 no Cursor (Python 3.11) |
 | Memória conversacional | Feito | Sessão em Postgres; histórico no prompt; Alembic + docker-compose |
 | API HTTP / healthcheck | Feito | `GET /health` local agrega Postgres e Groq |
+| Raciocínio Groq | Feito | `generate_reply` devolve `Reply`; `--text` mostra o raciocínio; tabela `reasonings` |
 | 5. Locomoção | Pendente | Andar e reagir a comandos da LLM |
 | 6. Integração no hardware | Parcial | Rosto no terminal; LCD no Raspberry Pi ainda TODO |
 
@@ -89,10 +90,10 @@ Depois da wake word **Jarvis**, o microfone captura a frase, o Whisper transcrev
 
 - `speak(text, language=None)` — sintetiza e toca
 - `transcribe(audio)` — devolve `(texto, idioma)`
-- `generate_reply(text, language)` — LLM (LangChain / Groq), sem tools; identidade e guardrails em `src/agent/instructions.md`; histórico da sessão ativa entra no prompt
-- `run_listen_repeat()` — loop: acordar → ouvir → pensar → falar
-- `run_text_chat(language="pt")` — chat por texto no terminal (`--text`), sem microfone, Whisper ou Piper; `sair` / `quit` / `exit` encerram a sessão ativa
-- Sessão em Postgres: uma ativa por vez, expira por inatividade (`SESSION_IDLE_MINUTES`, default 10); voz e texto compartilham
+- `generate_reply(text, language)` — devolve `Reply(spoken, reasoning)`; LLM (LangChain / Groq), sem tools; identidade e guardrails em `src/agent/instructions.md`; histórico da sessão ativa entra no prompt (só `messages`, sem raciocínio)
+- `run_listen_repeat()` — loop: acordar → ouvir → pensar → falar (`spoken` só)
+- `run_text_chat(language="pt")` — chat por texto no terminal (`--text`), sem microfone, Whisper ou Piper; se houver raciocínio, imprime o bloco `Raciocínio:` antes da linha do Jarvis; `sair` / `quit` / `exit` encerram a sessão ativa
+- Sessão em Postgres: uma ativa por vez, expira por inatividade (`SESSION_IDLE_MINUTES`, default 10); voz e texto compartilham; raciocínio da assistant em `reasonings` (1:1 opcional)
 - `GET /health` em `127.0.0.1:API_PORT` — 200 somente quando Postgres e Groq estão disponíveis; caso contrário, 503 com o estado de cada dependência
 - Rosto: Sleeping → Listening → Thinking → Answering → Sleeping (mock no terminal; só no loop de voz)
 
@@ -141,8 +142,9 @@ Testes: `py -3.11 -m unittest discover -s tests -v`.
 - **API do Piper 1.6.** Quem grava o WAV é `synthesize_wav()`.
 - **Idioma automático.** Whisper detecta PT/EN; o TTS escolhe a voz correspondente.
 - **`output.wav` é gerado.** Está no `.gitignore`.
-- **LLM remota, sem tools.** A chave e o modelo ficam no `.env`; o loop só chama `generate_reply` e fala o texto.
-- **Memória em Postgres.** Sessões e mensagens via SQLAlchemy + Alembic; o banco de desenvolvimento sobe por `docker-compose.yml`, não é instalado na máquina.
+- **LLM remota, sem tools.** A chave e o modelo ficam no `.env`; o loop chama `generate_reply` e fala só `Reply.spoken`.
+- **Memória em Postgres.** Sessões, mensagens e raciocínios via SQLAlchemy + Alembic; o banco de desenvolvimento sobe por `docker-compose.yml`, não é instalado na máquina.
+- **Raciocínio da Groq.** `include_reasoning` no `ChatGroq`; o `--text` mostra o raciocínio do turno; a tabela `reasonings` grava 1:1 com a mensagem `assistant` quando a Groq mandar.
 - **API HTTP local.** `src/api/` usa `http.server` da stdlib; `GET /health` agrega os pings de Postgres e Groq em `127.0.0.1:API_PORT`.
 - **`POSTGRES_*` obrigatórias na subida.** Mesmo com `DATABASE_URL`, as três credenciais continuam exigidas; a URL só vence na montagem da conexão.
 - **Rosto no terminal.** O LCD no Raspberry Pi está stubado com TODO.

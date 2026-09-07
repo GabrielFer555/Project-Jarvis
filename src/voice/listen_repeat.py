@@ -78,9 +78,9 @@ def run_listen_repeat() -> None:
                 mic.clear()
                 continue
 
-            print(f"Jarvis [{language}]: {reply}")
-            if reply:
+            print(f"Jarvis [{language}]: {reply.spoken}")
+            if reply.spoken:
                 face.answer()
-                speak(reply, language=language)
+                speak(reply.spoken, language=language)
             face.sleep()
             mic.clear()

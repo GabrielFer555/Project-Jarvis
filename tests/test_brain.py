@@ -178,6 +178,21 @@ class BrainTests(unittest.TestCase):
         self.mock_schema.assert_called_once()
         self.mock_resolve.assert_not_called()
 
+    def test_init_brain_requests_reasoning_and_token_budget(self) -> None:
+        settings = Settings(
+            token="gsk_test",
+            model="openai/gpt-oss-20b",
+            postgres_user="jarvis",
+            postgres_password="jarvis",
+            postgres_db="jarvis",
+        )
+        with patch("agent.brain.ChatGroq") as mock_chatgroq:
+            with patch("agent.brain.load_settings", return_value=settings):
+                brain.init_brain()
+        kwargs = mock_chatgroq.call_args.kwargs
+        self.assertEqual(kwargs["max_tokens"], 1024)
+        self.assertEqual(kwargs["model_kwargs"], {"include_reasoning": True})
+
     def test_ping_groq_uses_models_get_bearer_and_timeout_without_llm(self) -> None:
         settings = Settings(
             token="gsk_ping_secret",
@@ -251,7 +266,7 @@ class BrainTests(unittest.TestCase):
         unique = markdown.splitlines()[0]
         fala = "oi jarvis xyz-content"
 
-        spoken = brain.generate_reply(fala, "pt")
+        spoken = brain.generate_reply(fala, "pt").spoken
 
         self.assertEqual(spoken, "Tudo bem, e você?")
         messages = self._invoked_messages(mock_llm)
@@ -282,18 +297,66 @@ class BrainTests(unittest.TestCase):
 
         mock_llm.invoke.return_value = FakeAIMessage()
 
-        spoken = brain.generate_reply("oi", "pt")
+        reply = brain.generate_reply("oi", "pt")
 
-        self.assertEqual(spoken, "Resposta curta.")
-        self.assertNotIn("raciocinio interno nao falado", spoken)
-        self.assertNotIn("reasoning_content", spoken)
-        self.assertNotIn("AIMessage", spoken)
+        self.assertEqual(reply.spoken, "Resposta curta.")
+        self.assertEqual(reply.reasoning, "raciocinio interno nao falado")
+        self.assertNotIn("raciocinio interno nao falado", reply.spoken)
+        self.assertNotIn("reasoning_content", reply.spoken)
+        self.assertNotIn("AIMessage", reply.spoken)
+        self.assertEqual(self.mock_append.call_count, 2)
+        user_call, assistant_call = self.mock_append.call_args_list
+        self.assertEqual(user_call.args, (self._session_id, "user", "oi", "pt"))
+        self.assertNotIn("reasoning", user_call.kwargs)
+        self.assertEqual(
+            assistant_call.args,
+            (self._session_id, "assistant", "Resposta curta.", "pt"),
+        )
+        self.assertEqual(
+            assistant_call.kwargs["reasoning"],
+            "raciocinio interno nao falado",
+        )
+
+    def test_generate_reply_absent_or_empty_reasoning_is_none(self) -> None:
+        cases = (
+            None,
+            {},
+            {"reasoning_content": ""},
+            {"reasoning_content": "   \n"},
+        )
+        for extra in cases:
+            with self.subTest(additional_kwargs=extra):
+                self.mock_append.reset_mock()
+                mock_llm = self._stub_ready_brain()
+                if extra is None:
+
+                    class FakeAIMessage:
+                        content = "Falado."
+
+                else:
+
+                    class FakeAIMessage:
+                        content = "Falado."
+                        additional_kwargs = extra
+
+                mock_llm.invoke.return_value = FakeAIMessage()
+
+                reply = brain.generate_reply("oi", "pt")
+
+                self.assertEqual(reply.spoken, "Falado.")
+                self.assertIsNone(reply.reasoning)
+                assistant_call = self.mock_append.call_args_list[-1]
+                self.assertEqual(
+                    assistant_call.args,
+                    (self._session_id, "assistant", "Falado.", "pt"),
+                )
+                self.assertIsNone(assistant_call.kwargs["reasoning"])
 
     def test_user_message_committed_before_invoke(self) -> None:
         mock_llm = self._stub_ready_brain()
         order: list[str] = []
 
-        def track_append(_sid, role, _content, _language=""):
+        def track_append(_sid, role, _content, _language="", **_kwargs):
             order.append(role)
 
         def track_invoke(_messages):

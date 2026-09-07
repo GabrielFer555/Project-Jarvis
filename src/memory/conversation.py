@@ -5,7 +5,7 @@ from sqlalchemy import func, select, update
 
 from agent.settings import load_settings
 from memory.db import get_sessionmaker
-from memory.models import ChatSession, Message
+from memory.models import ChatSession, Message, Reasoning
 
 HISTORY_MAX_MESSAGES = 40
 HISTORY_MAX_CHARS = 8000
@@ -62,23 +62,32 @@ def get_active_session() -> UUID | None:
 
 
 def append_message(
-    session_id: UUID, role: str, content: str, language: str = ""
+    session_id: UUID,
+    role: str,
+    content: str,
+    language: str = "",
+    *,
+    reasoning: str | None = None,
 ) -> None:
+    if reasoning is not None and role != "assistant":
+        raise RuntimeError("Raciocínio só pode ser gravado para mensagem assistant")
     with get_sessionmaker()() as db:
         next_seq = db.scalar(
             select(func.coalesce(func.max(Message.seq), 0) + 1).where(
                 Message.session_id == session_id
             )
         )
-        db.add(
-            Message(
-                session_id=session_id,
-                seq=next_seq,
-                role=role,
-                content=content,
-                language=language or None,
-            )
+        message = Message(
+            session_id=session_id,
+            seq=next_seq,
+            role=role,
+            content=content,
+            language=language or None,
         )
+        db.add(message)
+        if reasoning is not None:
+            db.flush()
+            db.add(Reasoning(message_id=message.id, content=reasoning))
         if role == "user":
             db.execute(
                 update(ChatSession)

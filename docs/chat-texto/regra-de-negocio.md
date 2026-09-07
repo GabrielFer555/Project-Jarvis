@@ -2,12 +2,12 @@
 
 ## Objetivo
 
-O Jarvis pode ser exercitado sem voz: a pessoa digita no terminal, a mesma LLM e os mesmos guardrails respondem, e o texto da resposta aparece na tela. No Cursor, esse processo (e o de voz) pode ser depurado com F5.
+O Jarvis pode ser exercitado sem voz: a pessoa digita no terminal, a mesma LLM e os mesmos guardrails respondem, e o texto da resposta aparece na tela — com o raciocínio interno da Groq, quando houver, num bloco `Raciocínio:` antes da linha do Jarvis. No Cursor, esse processo (e o de voz) pode ser depurado com F5.
 
 ## Comportamento
 
 - Sem `--text`, nada muda: wake word, microfone, Whisper, LLM e Piper seguem como no loop de voz.
-- Com `--text`, não há wake word. Cada linha digitada é um pedido ao cérebro. A resposta é só impressa.
+- Com `--text`, não há wake word. Cada linha digitada é um pedido ao cérebro. Se `Reply.reasoning` existir, o terminal imprime o bloco `Raciocínio:` (título e texto interno) **antes** da linha `Jarvis [lang]: <spoken>`. Sem raciocínio, só a linha do Jarvis, como antes.
 - O modo texto não abre microfone, não transcreve, não sintetiza e não mexe no rosto.
 - Identidade, tom, limites e recusas continuam em `src/agent/instructions.md`. O modo texto não tem instruções próprias.
 - A fala digitada entra no prompt como **dado**, entre `<<<` e `>>>`, igual à transcrição da voz.
@@ -22,7 +22,7 @@ O Jarvis pode ser exercitado sem voz: a pessoa digita no terminal, a mesma LLM e
 
 | Entrada | Origem | Saída | Destino |
 | --- | --- | --- | --- |
-| Linha de texto | stdin (`input`) | Texto da resposta | stdout (`print`) |
+| Linha de texto | stdin (`input`) | `Reply.spoken` e, se houver, bloco `Raciocínio:` | stdout (`print`) |
 | `--lang` (`pt` / `en`) | CLI | `{language_name}` no prompt | `generate_reply` |
 | Identidade e guardrails | `src/agent/instructions.md` | Prompt montado | LLM na Groq |
 | `GROQ_API_KEY`, `GROQ_MODEL` | `.env` | Cliente `ChatGroq` | API da Groq |

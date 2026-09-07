@@ -12,7 +12,7 @@ microfone → STT → LLM (cérebro) → TTS → alto-falante
                  locomoção / sensores (ainda fora)
 ```
 
-A wake word e o VAD permanecem em `src/voice/`. Só o trecho "o que falar" muda: em vez de `speak(command)`, o loop chama `generate_reply` e depois `speak(reply)`. O modo `--text` é um segundo chamador do mesmo `generate_reply` (`src/agent/text_chat.py`); a assinatura do cérebro não muda.
+A wake word e o VAD permanecem em `src/voice/`. Só o trecho "o que falar" muda: em vez de `speak(command)`, o loop chama `generate_reply` e depois `speak(reply.spoken)`. O modo `--text` é um segundo chamador do mesmo `generate_reply` (`src/agent/text_chat.py`); o retorno é `Reply`, não `str`.
 
 ## Componentes
 
@@ -22,7 +22,7 @@ A wake word e o VAD permanecem em `src/voice/`. Só o trecho "o que falar" muda:
 | Settings | `src/agent/settings.py` | Carregar dotenv, validar obrigatórias e defaults |
 | Instruções | `src/agent/instructions.md` | Identidade e guardrails, em português, fora do Python |
 | Memória | `src/memory/` | Sessão ativa, gravação e janela do histórico |
-| Cérebro | `src/agent/brain.py` | Ler instruções, montar a lista de mensagens, invocar `ChatGroq` e expor `ping_groq()` para o healthcheck |
+| Cérebro | `src/agent/brain.py` | Ler instruções, montar a lista de mensagens, invocar `ChatGroq` com `include_reasoning`, devolver `Reply` e expor `ping_groq()` para o healthcheck |
 | Loop de voz | `src/voice/listen_repeat.py` | Acordar → ouvir → pensar → falar |
 | Loop de texto | `src/agent/text_chat.py` | Segundo chamador: stdin → `generate_reply` → stdout |
 | Testes | `tests/test_settings.py`, `tests/test_brain.py`, `tests/test_memory.py` | Env, prompt como lista e recorte da janela, com `ChatGroq` e memória mockados |
@@ -40,14 +40,16 @@ wake word "Jarvis" + frase
         ▼
 generate_reply(texto, idioma)     # voz: listen_repeat; texto: text_chat
         │
-        ├── resolve_session → append user (commit) → load_window
+        ├── resolve_session → append user (commit, sem reasoning) → load_window
         ├── invoke([SystemMessage(instruções), *janela])
         │     envelope <<< >>> em cada mensagem de user
-        ├── append assistant
-        └── resposta = AIMessage.content
+        ├── spoken = AIMessage.content.strip()
+        ├── reasoning = additional_kwargs["reasoning_content"]  # ou None
+        ├── append assistant(spoken, reasoning=reasoning)
+        └── return Reply(spoken, reasoning)
         │
-        ├── voz   → Piper speak(resposta, language)
-        └── texto → print no terminal (sem Piper)
+        ├── voz   → Piper speak(reply.spoken, language)
+        └── texto → [se reasoning] bloco Raciocínio: ; depois Jarvis [lang]: spoken
 
 GET /health → ping_groq()
                   └── GET /openai/v1/models com Bearer, User-Agent Jarvis/1.0, timeout 5s
@@ -57,10 +59,16 @@ GET /health → ping_groq()
 ## Contratos
 
 ```python
+@dataclass(frozen=True)
+class Reply:
+    spoken: str
+    reasoning: str | None = None
+
 def load_settings() -> Settings    # token, model e Postgres; RuntimeError se faltar env
 def init_brain() -> Settings       # lê instructions.md, verifica o esquema e monta o ChatGroq uma vez
+                                   # ChatGroq(..., max_tokens=1024, model_kwargs={"include_reasoning": True})
 def ping_groq() -> None             # conexão/auth via GET models; não invoca a LLM
-def generate_reply(text: str, language: str = "") -> str
+def generate_reply(text: str, language: str = "") -> Reply
 ```
 
 | Chave | Papel |
@@ -68,11 +76,11 @@ def generate_reply(text: str, language: str = "") -> str
 | `GROQ_API_KEY` | Chave da Groq ([console.groq.com/keys](https://console.groq.com/keys)) |
 | `GROQ_MODEL` | Id do modelo, ex. `openai/gpt-oss-20b` |
 
-O prompt é uma lista de mensagens LangChain, sem `PromptTemplate`: `SystemMessage` com as instruções de `instructions.md` (com `{language_name}` resolvido para "português", "inglês" ou "o mesmo idioma da pessoa"), seguidas do histórico da sessão como `HumanMessage` / `AIMessage`. Cada fala de usuário — atual ou reidratada — entra entre `<<<` e `>>>`. A resposta falada é `AIMessage.content`, com `strip()`.
+O prompt é uma lista de mensagens LangChain, sem `PromptTemplate`: `SystemMessage` com as instruções de `instructions.md` (com `{language_name}` resolvido para "português", "inglês" ou "o mesmo idioma da pessoa"), seguidas do histórico da sessão como `HumanMessage` / `AIMessage`. Cada fala de usuário — atual ou reidratada — entra entre `<<<` e `>>>`. `Reply.spoken` é `AIMessage.content` com `strip()`. `Reply.reasoning` vem de `additional_kwargs["reasoning_content"]` somente se for `str` não vazia após `strip()`; senão `None`. `include_reasoning` vai em `model_kwargs`; não se envia `reasoning_format`. O append da assistant usa `append_message(..., reasoning=reasoning)`.
 
 ## Dados
 
-Postgres via `src/memory/`: tabelas `sessions` e `messages`. O cérebro não monta SQL; chama `resolve_session`, `append_message` e `load_window`. A inferência continua remota na Groq.
+Postgres via `src/memory/`: tabelas `sessions`, `messages` e `reasonings`. O cérebro não monta SQL; chama `resolve_session`, `append_message` (a assistant leva `reasoning=`) e `load_window` (só `messages`). A inferência continua remota na Groq.
 
 ## Dependências
 
@@ -91,7 +99,9 @@ Postgres via `src/memory/`: tabelas `sessions` e `messages`. O cérebro não mon
 | `ChatGroq` no lugar de `HuggingFaceEndpoint` | Inferência estável e rápida para conversa por voz |
 | Instruções em markdown | Tom, limites e recusas mudam sem tocar Python |
 | Prompt como lista de mensagens | SystemMessage (instruções) + histórico da sessão; envelope `<<<` `>>>` em cada fala de usuário |
-| Falar só `AIMessage.content` | Evita mandar raciocínio interno ou objeto LangChain para o TTS |
-| `temperature=0.7`, `max_tokens=128` | Resposta curta, pronta para ser falada |
+| Falar só `AIMessage.content` (`Reply.spoken`) | Evita mandar raciocínio interno ou objeto LangChain para o TTS |
+| `temperature=0.7`, `max_tokens=1024` | Orçamento extra cobre tokens de raciocínio; a fala continua limitada a duas frases por `instructions.md` |
+| `include_reasoning` em `model_kwargs` | O modelo vigente devolve raciocínio separado; sem `reasoning_format` |
+| `Reply` no lugar de `str` | Dois valores (falado e raciocínio) sem global nem segundo `generate_*` |
 | `ping_groq()` separado de `generate_reply()` | O healthcheck mede conexão e autenticação sem gastar completion nem alterar o turno |
 | Sem tools nem RAG | Pedido explícito: nenhum processamento extra no caminho da conversa |

@@ -6,6 +6,7 @@ from pathlib import Path
 from threading import Barrier
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
+from uuid import uuid4
 
 from sqlalchemy import URL
 from sqlalchemy.engine import make_url
@@ -17,9 +18,11 @@ from memory import db
 from memory.conversation import (
     HISTORY_MAX_CHARS,
     HISTORY_MAX_MESSAGES,
+    append_message,
     build_window,
 )
 from memory.db import get_database_url, ping
+from memory.models import Message, Reasoning
 
 
 def _settings(**overrides) -> Settings:
@@ -72,6 +75,77 @@ class BuildWindowTests(unittest.TestCase):
         window = build_window(rows, max_messages=10, max_chars=160)
         self.assertEqual(window, [("user", "c" * 100)])
         self.assertEqual(window[0][0], "user")
+
+
+class AppendMessageTests(unittest.TestCase):
+    def test_user_role_rejects_reasoning(self) -> None:
+        session_factory = MagicMock()
+        with patch(
+            "memory.conversation.get_sessionmaker", return_value=session_factory
+        ):
+            with self.assertRaises(RuntimeError):
+                append_message(uuid4(), "user", "oi", reasoning="nao deveria")
+        session_factory.assert_not_called()
+
+    def _mocked_session(self):
+        session = MagicMock()
+        session.scalar.return_value = 1
+        added: list[object] = []
+        ops: list[str] = []
+
+        def add(obj: object) -> None:
+            added.append(obj)
+            ops.append("add")
+
+        def flush() -> None:
+            for obj in added:
+                if isinstance(obj, Message) and obj.id is None:
+                    obj.id = uuid4()
+            ops.append("flush")
+
+        def commit() -> None:
+            ops.append("commit")
+
+        session.add.side_effect = add
+        session.flush.side_effect = flush
+        session.commit.side_effect = commit
+        session_factory = MagicMock()
+        session_factory.return_value.__enter__.return_value = session
+        return session, session_factory, added, ops
+
+    def test_assistant_reasoning_inserted_1_to_1_same_commit(self) -> None:
+        session, session_factory, added, ops = self._mocked_session()
+        with patch(
+            "memory.conversation.get_sessionmaker", return_value=session_factory
+        ):
+            append_message(uuid4(), "assistant", "falado", reasoning="penso")
+
+        messages = [obj for obj in added if isinstance(obj, Message)]
+        reasonings = [obj for obj in added if isinstance(obj, Reasoning)]
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(len(reasonings), 1)
+        self.assertEqual(messages[0].content, "falado")
+        self.assertEqual(reasonings[0].content, "penso")
+        self.assertIsNotNone(messages[0].id)
+        self.assertEqual(reasonings[0].message_id, messages[0].id)
+        self.assertEqual(ops, ["add", "flush", "add", "commit"])
+        session.commit.assert_called_once_with()
+
+    def test_none_reasoning_does_not_add_reasoning(self) -> None:
+        session, session_factory, added, ops = self._mocked_session()
+        with patch(
+            "memory.conversation.get_sessionmaker", return_value=session_factory
+        ):
+            append_message(uuid4(), "assistant", "falado", reasoning=None)
+
+        messages = [obj for obj in added if isinstance(obj, Message)]
+        reasonings = [obj for obj in added if isinstance(obj, Reasoning)]
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0].content, "falado")
+        self.assertEqual(reasonings, [])
+        self.assertEqual(ops, ["add", "commit"])
+        session.flush.assert_not_called()
+        session.commit.assert_called_once_with()
 
 
 class DatabaseUrlTests(unittest.TestCase):

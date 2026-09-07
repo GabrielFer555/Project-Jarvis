@@ -6,16 +6,16 @@ O cérebro já aceita texto (`generate_reply`). O canal de texto é um segundo p
 
 ```
 voz:   microfone → STT → LLM → TTS → alto-falante
-texto: stdin     →      LLM →      stdout
+texto: stdin     →      LLM →      stdout   # Reply: reasoning (opcional) + spoken
 ```
 
 ## Componentes
 
 | Componente | Módulo | Responsabilidade |
 | --- | --- | --- |
-| Chat texto | `src/agent/text_chat.py` | `init_brain` + loop stdin → `generate_reply` → stdout; `sair` dispara o encerramento |
+| Chat texto | `src/agent/text_chat.py` | `init_brain` + loop stdin → `generate_reply` → `Reply`; bloco `Raciocínio:` opcional e linha Jarvis com `spoken`; `sair` dispara o encerramento |
 | Roteador | `src/main.py` | `--text` / `--lang` ou loop de voz; `voice` só no ramo sem `--text` |
-| Cérebro | `src/agent/brain.py` | Mesmo contrato público; grava e carrega o histórico via `src/memory/` |
+| Cérebro | `src/agent/brain.py` | `generate_reply(...) -> Reply`; grava e carrega o histórico via `src/memory/` |
 | Encerramento da sessão | `src/memory/conversation.py` | `get_active_session()` e `close_session()`; o canal não grava histórico |
 | Launch | `.vscode/launch.json` | Configurações `debugpy` do Cursor |
 | Testes | `tests/test_text_chat.py` | Flags, vazio, sair, erro, idioma |
@@ -50,8 +50,9 @@ start_api()              # bind síncrono; serve_forever em daemon
             │     └── fim
             ├── EOF / Ctrl+C → fim (sem encerrar sessão)
             └── texto
-                  ├── generate_reply(texto, language)
-                  └── Jarvis [lang]: <resposta>
+                  ├── generate_reply(texto, language) → Reply
+                  ├── [se reply.reasoning] Raciocínio: / print reasoning
+                  └── Jarvis [lang]: <spoken>
                   (exceção → print erro → loop)
 ```
 
@@ -123,6 +124,7 @@ O canal não tem banco próprio nem arquivo de histórico. A sessão vive em Pos
 | Canal novo em `src/agent/text_chat.py`, não em `voice/` | O objetivo é pular áudio; o pacote de voz não deve ser importado |
 | Import preguiçoso de `voice` em `main.py` | `voice` só entra no ramo sem `--text`; o modo texto não carrega microfone, Whisper, Piper nem a wake word |
 | Reusar `generate_reply` sem wrapper de prompt | Testar os guardrails reais, não uma cópia |
+| Ler `Reply` e imprimir `Raciocínio:` só quando houver | Canal de debug; sem raciocínio o stdout fica como antes |
 | Idioma por flag, padrão `pt` | Sem Whisper não há detecção; o projeto é em português |
 | `argparse` só com `--text` e `--lang` | `main.py` permanece roteador fino |
 | Sem rosto no modo texto | Pedido é testar a LLM, não o hardware |

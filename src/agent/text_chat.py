@@ -28,4 +28,7 @@ def run_text_chat(language: str = "pt") -> None:
             print(f"Erro na LLM: {exc}")
             continue
 
-        print(f"Jarvis [{language}]: {reply}")
+        if reply.reasoning:
+            print("Raciocínio:")
+            print(reply.reasoning)
+        print(f"Jarvis [{language}]: {reply.spoken}")

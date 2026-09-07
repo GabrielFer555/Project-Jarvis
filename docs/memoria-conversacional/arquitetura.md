@@ -10,7 +10,7 @@ microfone → STT → LLM (cérebro) → TTS → alto-falante
                   memória (Postgres)
 ```
 
-O pacote `src/memory/` grava e carrega o histórico. Nem `src/voice/listen_repeat.py` nem `src/agent/text_chat.py` conhecem o banco: os dois continuam chamando `generate_reply(texto, idioma)` com a mesma assinatura. Quem grava e quem carrega o histórico é o cérebro.
+O pacote `src/memory/` grava e carrega o histórico. Nem `src/voice/listen_repeat.py` nem `src/agent/text_chat.py` conhecem o banco: os dois chamam `generate_reply(texto, idioma)` e recebem `Reply`. Quem grava e quem carrega o histórico é o cérebro.
 
 A única exceção é o encerramento manual da sessão: o chat texto localiza a ativa com `get_active_session()` e, se houver, chama `close_session`.
 
@@ -23,15 +23,15 @@ Nada fora de `src/memory/` toca SQLAlchemy. O resto do projeto vê funções que
 | Variáveis de ambiente | `.env` / `.env.example` | Fonte única: `GROQ_*`, `POSTGRES_*`, `DATABASE_URL` e `SESSION_IDLE_MINUTES` |
 | Settings | `src/agent/settings.py` | Validar as obrigatórias (fail-closed) e resolver as opcionais com default; guarda as partes, não monta URL |
 | Banco de desenvolvimento | `docker-compose.yml` | Postgres em contêiner, credenciais interpoladas do `.env`, volume nomeado, porta em `127.0.0.1`, healthcheck |
-| Modelos | `src/memory/models.py` | `Base`, `ChatSession` e `Message` em SQLAlchemy 2.0 declarativo |
+| Modelos | `src/memory/models.py` | `Base`, `ChatSession`, `Message` e `Reasoning` em SQLAlchemy 2.0 declarativo |
 | Engine e verificações | `src/memory/db.py` | `Engine`, `sessionmaker`, revisão Alembic na subida e `ping()` de conexão sob demanda |
 | Migrações | `alembic/`, `alembic.ini` | Histórico versionado do esquema, gerado por autogenerate a partir de `Base.metadata` |
-| Sessões e mensagens | `src/memory/conversation.py` | Resolver a sessão ativa, localizar sem criar, gravar mensagem, carregar a janela, encerrar sessão |
+| Sessões, mensagens e raciocínios | `src/memory/conversation.py` | Resolver a sessão ativa, localizar sem criar, gravar mensagem (e `reasonings` na mesma transação da assistant), carregar a janela, encerrar sessão |
 | Recorte da janela | `src/memory/conversation.py` | `build_window`: função pura, sem ORM e sem SQL |
-| Cérebro | `src/agent/brain.py` | Montar a lista de mensagens (system + janela) e invocar o `ChatGroq` |
+| Cérebro | `src/agent/brain.py` | Montar a lista de mensagens (system + janela), invocar o `ChatGroq` e devolver `Reply` |
 | Instruções | `src/agent/instructions.md` | Identidade e guardrails, inalterados por esta funcionalidade |
-| Loop de voz | `src/voice/listen_repeat.py` | Inalterado; segue chamando `generate_reply` |
-| Loop de texto | `src/agent/text_chat.py` | Chama `generate_reply`; em `sair` / `quit` / `exit` usa `get_active_session` e, se houver, `close_session` |
+| Loop de voz | `src/voice/listen_repeat.py` | Chama `generate_reply`; print e Piper só com `reply.spoken` |
+| Loop de texto | `src/agent/text_chat.py` | Lê `Reply`; bloco `Raciocínio:` opcional; em `sair` / `quit` / `exit` usa `get_active_session` e, se houver, `close_session` |
 | Testes | `tests/test_brain.py`, `tests/test_memory.py` | Contrato do prompt como lista de mensagens e recorte da janela, com banco e LLM mockados |
 
 ## Fluxo
@@ -54,20 +54,22 @@ generate_reply(texto, idioma)
         │        ├── encerra sessões abertas e ociosas (ended_at = last_seen_at)
         │        └── devolve a ativa ou cria uma nova
         │
-        ├─ 2. append_message(sid, 'user', texto, idioma)   # commit antes da LLM
+        ├─ 2. append_message(sid, 'user', texto, idioma)   # commit antes da LLM; sem reasoning
         │        └── seq = max(seq)+1  •  last_seen_at = now()
         │
         ├─ 3. load_window(sid)
-        │        ├── select ... order by seq desc limit 40, invertido
+        │        ├── select role, content from messages ... order by seq desc limit 40, invertido
+        │        ├── sem join com reasonings
         │        └── build_window: teto de caracteres + início em 'user'
         │
         ├─ 4. invoke([SystemMessage(instruções), *janela])
-        │        └── falhou? a fala do 'user' já está comitada, sem resposta
+        │        └── falhou? a fala do 'user' já está comitada, sem assistant nem reasonings
         │
-        └─ 5. append_message(sid, 'assistant', resposta, idioma)
+        └─ 5. append_message(sid, 'assistant', spoken, idioma, reasoning=reasoning)
+                 └── mesmo commit: Message + Reasoning (se reasoning não for None)
         │
-        ├── voz   → Piper speak(resposta, idioma)
-        └── texto → print no terminal
+        ├── voz   → Piper speak(reply.spoken, idioma)
+        └── texto → [se reasoning] bloco Raciocínio: ; Jarvis [lang]: spoken
                         │
                         └── 'sair' → get_active_session() → UUID | None
                                       ├── UUID → close_session(sid) → ended_at = now()
@@ -90,6 +92,7 @@ GET /health → src/api/ → ping() → SELECT 1
 class Base(DeclarativeBase): ...
 class ChatSession(Base):  __tablename__ = "sessions"
 class Message(Base):      __tablename__ = "messages"
+class Reasoning(Base):    __tablename__ = "reasonings"
 
 # src/memory/db.py
 def get_engine() -> Engine
@@ -106,8 +109,18 @@ HISTORY_MAX_CHARS = 8000
 
 def resolve_session(language: str = "") -> UUID
 def get_active_session() -> UUID | None        # localiza sem criar; None se não houver ativa
-def append_message(session_id: UUID, role: str, content: str, language: str = "") -> None
+def append_message(
+    session_id: UUID,
+    role: str,
+    content: str,
+    language: str = "",
+    *,
+    reasoning: str | None = None,
+) -> None
+    # reasoning preenchido e role != "assistant" → RuntimeError
+    # reasoning preenchido e role == "assistant" → Message + Reasoning no mesmo commit
 def load_window(session_id: UUID) -> list[tuple[str, str]]
+    # só messages; sem join com reasonings
 def close_session(session_id: UUID) -> None
 def build_window(
     rows: list[tuple[str, str]],
@@ -115,9 +128,9 @@ def build_window(
     max_chars: int = HISTORY_MAX_CHARS,
 ) -> list[tuple[str, str]]
 
-# src/agent/brain.py — assinaturas públicas inalteradas
+# src/agent/brain.py
 def init_brain() -> Settings
-def generate_reply(text: str, language: str = "") -> str
+def generate_reply(text: str, language: str = "") -> Reply
 ```
 
 A fronteira do pacote devolve `UUID` e tuplas, não instâncias mapeadas.
@@ -162,7 +175,7 @@ def _wrap_person(content: str) -> str:
 
 ## Dados
 
-Postgres, duas tabelas, declaradas em `src/memory/models.py` e materializadas por migração Alembic. Não há `create_all()` em runtime.
+Postgres, três tabelas, declaradas em `src/memory/models.py` e materializadas por migração Alembic (`20260907_0001` para `sessions`/`messages`; `20260907_0002` para `reasonings`). Não há `create_all()` em runtime.
 
 ```python
 class ChatSession(Base):
@@ -187,6 +200,15 @@ class Message(Base):
         UniqueConstraint("session_id", "seq", name="messages_session_seq_key"),
         Index("messages_session_seq_idx", "session_id", "seq"),
     )
+
+class Reasoning(Base):
+    __tablename__ = "reasonings"
+    id:         Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    message_id: Mapped[UUID] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), unique=True
+    )
+    content:    Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 ```
 
 A consulta da sessão ativa usa `func.now()` do servidor:
@@ -198,7 +220,7 @@ select(ChatSession.id).where(
 ).order_by(ChatSession.last_seen_at.desc()).limit(1)
 ```
 
-`Message` não tem `updated_at`. `ChatSession` não tem coluna de resumo nem de dono. Sem vetores nesta funcionalidade.
+`Message` não tem `updated_at`. `ChatSession` não tem coluna de resumo nem de dono. Sem vetores nesta funcionalidade. `Reasoning` é 1:1 **opcional** com a mensagem `assistant` (FK única, cascade); `user` e assistant sem raciocínio não têm linha. Sem `relationship()`.
 
 ## Infraestrutura de desenvolvimento
 
@@ -250,6 +272,10 @@ Sequência de subida: `docker compose up -d --wait`, depois `alembic upgrade hea
 
 | Decisão | Motivo |
 | --- | --- |
+| Tabela `reasonings` em vez de coluna em `messages` | Raciocínio é opcional, pode ser longo e não participa da janela |
+| 1:1 opcional com a mensagem `assistant` | Só a LLM produz raciocínio; `user` + `reasoning` é `RuntimeError` |
+| `load_window` ignora `reasonings` | Não inflar o prompt nem devolver chain-of-thought ao modelo |
+| Mesmo commit da assistant | Resposta e raciocínio nascem juntos; falha da LLM continua sem os dois |
 | Uma linha por mensagem, com `role` | O par `message`/`response` na mesma linha quebra quando a LLM falha |
 | ORM declarativo em vez de SQL escrito à mão | Esquema code-first; Alembic gera migração por diff; pgvector futuro entra como coluna |
 | Alembic em vez de `CREATE TABLE IF NOT EXISTS` | `IF NOT EXISTS` não aplica `ALTER` futuro e deixa o banco defasado em silêncio |

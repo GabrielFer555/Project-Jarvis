@@ -42,3 +42,18 @@ class Message(Base):
         UniqueConstraint("session_id", "seq", name="messages_session_seq_key"),
         Index("messages_session_seq_idx", "session_id", "seq"),
     )
+
+
+class Reasoning(Base):
+    __tablename__ = "reasonings"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    message_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    content: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
