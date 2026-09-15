@@ -108,8 +108,14 @@ class MicSession:
         min_speech_seconds: float = 0.25,
         start_timeout: float | None = None,
         ignore_ms: int = 0,
+        reset_start_timeout_on_short: bool = False,
     ) -> np.ndarray:
-        """Record until a pause after speech. Empty array if nobody speaks in time."""
+        """Record until a pause after speech. Empty array if nobody speaks in time.
+
+        reset_start_timeout_on_short restarts the start_timeout clock when a
+        take is discarded as too short. Default False keeps the original
+        deadline (wake-word wait and "Pode falar.").
+        """
         pre_roll: deque[np.ndarray] = deque(maxlen=PRE_ROLL_CHUNKS)
         frames: list[np.ndarray] = []
         speech_started = False
@@ -153,6 +159,9 @@ class MicSession:
                     silent_chunks = 0
                     speech_chunks = 0
                     pre_roll.clear()
+                    if reset_start_timeout_on_short:
+                        waited_chunks = 0
+                        ignore_chunks = 0
             else:
                 pre_roll.append(chunk)
                 noise_rms = 0.98 * noise_rms + 0.02 * rms

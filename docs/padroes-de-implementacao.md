@@ -8,13 +8,14 @@ A skill `spec` respeita estes padrões ao montar o plano. A skill `rock-it` lê 
 
 - Interpretador: `py -3.11`. Neste Windows, `py` sem versão abre o 3.14, que não tem as dependências.
 - Escopo fechado: só o que está nos requisitos funcionais do plano. Sem refactor, extra ou "melhoria" não pedida.
-- Código novo em `src/`, no pacote da etapa (`voice`, `agent`, `memory`, `hardware`, `vision`, `robot`).
+- Código novo em `src/`, no pacote da etapa (`voice`, `agent`, `api`, `memory`, `hardware`, `vision`, `robot`).
 - `src/main.py` permanece um ponto de entrada fino: roteia para o loop, não contém regra.
 - Sem dependência fora da stack obrigatória; nada de substituto equivalente por conveniência.
 - Segredos no `.env`; `.env.example` documenta as chaves. A chave real não entra no git.
 - Fail-closed na subida: credencial ou arquivo obrigatório ausente levanta `RuntimeError` antes do loop começar.
 - Identidade e guardrails da LLM ficam em markdown (`src/agent/instructions.md`), não em string no Python.
 - Backend de hardware em classe separada; o loop conhece só a abstração (ex.: `RobotFace` / `create_face()`).
+- Postgres de desenvolvimento sobe por `docker-compose.yml` na raiz; não é instalado na máquina.
 
 ## Stack obrigatória
 
@@ -26,7 +27,9 @@ A skill `spec` respeita estes padrões ao montar o plano. A skill `rock-it` lê 
 | STT | `faster-whisper` |
 | TTS | Piper |
 | Artefatos de voz | Hugging Face Hub (modelos Whisper e vozes Piper) |
-| Banco vetorial | Postgres |
+| Acesso a dados | SQLAlchemy 2.0 ORM + Alembic |
+| Banco | Postgres (sessões e mensagens; vetores na task do RAG) |
+| HTTP local | stdlib `http.server` para a API atual; sem framework web |
 
 O Hugging Face Hub é fonte de artefatos STT/TTS, **não** provedor do cérebro.
 
@@ -34,6 +37,9 @@ O Hugging Face Hub é fonte de artefatos STT/TTS, **não** provedor do cérebro.
 
 ```powershell
 py -3.11 -m pip install -r requirements.txt
+docker compose up -d --wait
+alembic upgrade head
+alembic revision --autogenerate -m "descricao"
 py -3.11 src/main.py
 py -3.11 src/main.py --text
 py -3.11 -m compileall src
@@ -94,12 +100,13 @@ Testes automatizados só quando houver necessidade real: lógica ramificada, con
 | `.env` + `.env.example` | A chave não entra no git; o exemplo documenta as chaves |
 | Falta de credencial aborta na subida | Erro claro no início em vez de falha no meio da conversa |
 | Instruções da LLM em `instructions.md` | Tom, limites e recusas mudam sem tocar Python |
-| Cérebro sem tools, RAG ou memória | Cada capacidade entra como etapa própria, validada sozinha |
+| Cérebro sem tools ou RAG | Cada capacidade entra como etapa própria, validada sozinha; memória conversacional já entregue |
 | Métodos concretos e `render` abstrato no rosto | Os quatro comportamentos são iguais; só o desenho muda |
 | Mock no terminal quando falta hardware | Desenvolvimento no Windows, sem Raspberry Pi |
 | Pasta por task em `spec/task-{slug}-{NNN}/` | Ordem cronológica na raiz, sem colisão de slug |
 | Spec planeja e para; rock-it executa | Separar contrato de execução |
 | `docs/` canônico e pasta da task congelada | Uma fonte viva por funcionalidade, sem cópias divergentes |
 | Padrões num único arquivo global | Evita repetir as mesmas convenções em cada feature |
+| HTTP atual com stdlib `http.server` | O healthcheck local é um GET JSON e não justifica adicionar framework à stack |
 | `synthesize_wav()` no Piper | Na API 1.6 é quem grava o WAV |
 | `output.wav` no `.gitignore` | É arquivo gerado |

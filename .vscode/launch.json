@@ -10,7 +10,10 @@
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": true,
-      "python": "C:\\Users\\GABRIEL\\AppData\\Local\\Python\\pythoncore-3.11-64\\python.exe"
+      "python": "C:\\Users\\GABRIEL\\AppData\\Local\\Python\\pythoncore-3.11-64\\python.exe",
+      "env": {
+        "PYDEVD_LOAD_NATIVE_LIB": "0"
+      }
     },
     {
       "name": "Jarvis: voz",
@@ -20,7 +23,10 @@
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": true,
-      "python": "C:\\Users\\GABRIEL\\AppData\\Local\\Python\\pythoncore-3.11-64\\python.exe"
+      "python": "C:\\Users\\GABRIEL\\AppData\\Local\\Python\\pythoncore-3.11-64\\python.exe",
+      "env": {
+        "PYDEVD_LOAD_NATIVE_LIB": "0"
+      }
     }
   ]
 }

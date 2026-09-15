@@ -5,7 +5,10 @@
 O rosto é um atuador paralelo ao áudio, no mesmo loop:
 
 ```
-Sleeping ──wake word──► Listening ──frase──► Thinking ──LLM──► Answering ──TTS──► Sleeping
+Sleeping ──wake word──► Listening ──frase──► Thinking ──LLM──► Answering ──TTS──► Listening (janela)
+                                                                                      │
+                                                                                      ├── fala → Thinking
+                                                                                      └── fecha → Sleeping
 ```
 
 Não substitui STT/LLM/TTS; só reflete o estágio atual. O backend de desenvolvimento é o terminal Windows; o de hardware (LCD no Raspberry Pi) fica reservado.
@@ -18,7 +21,7 @@ Não substitui STT/LLM/TTS; só reflete o estágio atual. O backend de desenvolv
 | `TerminalFace` | `src/hardware/face/terminal.py` | Mock ASCII no terminal |
 | `RaspberryLcdFace` | `src/hardware/face/lcd.py` | Stub com TODO para o LCD |
 | `create_face()` | `src/hardware/face/__init__.py` | Devolve `TerminalFace` até o LCD existir |
-| Loop | `src/voice/listen_repeat.py` | Dispara as transições |
+| Loop | `src/voice/listen.py` | Dispara as transições |
 | Testes | `tests/test_face.py` | Estado inicial, ciclo dos quatro estados, factory, LCD não implementado |
 
 ## Fluxo
@@ -31,7 +34,9 @@ sleep()     Aguardando "Jarvis"
 listen()    Wake word ouvida
 think()     generate_reply(...)
 answer()    speak(resposta)
-sleep()     Fim do turno
+listen()    Janela de conversa (pós-TTS)
+        ├── fala → think()
+        └── fecha → sleep()
 ```
 
 ## Contratos

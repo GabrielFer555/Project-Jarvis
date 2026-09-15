@@ -4,7 +4,7 @@ Robô conversacional que anda e usa uma LLM como cérebro de operações.
 
 O objetivo é um assistente físico: escuta, pensa, fala e se move. Cada etapa é construída e validada isoladamente antes de entrar no loop principal.
 
-Mapa das funcionalidades: [docs/](docs/README.md) — [cérebro](docs/cerebro-llm/regra-de-negocio.md), [chat texto](docs/chat-texto/regra-de-negocio.md), [rosto](docs/rosto-do-robo/regra-de-negocio.md), [spec](docs/spec/regra-de-negocio.md). Padrões do projeto: [docs/padroes-de-implementacao.md](docs/padroes-de-implementacao.md). Histórico detalhado: [docs/progresso.md](docs/progresso.md). Plano e decisão de cada task: [spec/](spec/task-spec-docs-vivas-006/plano.md) (skill spec; a execução é `/rock-it`).
+Mapa das funcionalidades: [docs/](docs/README.md) — [API](docs/api/regra-de-negocio.md), [cérebro](docs/cerebro-llm/regra-de-negocio.md), [chat texto](docs/chat-texto/regra-de-negocio.md), [memória](docs/memoria-conversacional/regra-de-negocio.md), [rosto](docs/rosto-do-robo/regra-de-negocio.md), [spec](docs/spec/regra-de-negocio.md), [voz](docs/voz/regra-de-negocio.md). Padrões do projeto: [docs/padroes-de-implementacao.md](docs/padroes-de-implementacao.md). Histórico detalhado: [docs/progresso.md](docs/progresso.md). Plano e decisão de cada task: [spec/](spec/task-spec-docs-vivas-006/plano.md) (skill spec; a execução é `/rock-it`).
 
 ## Visão
 
@@ -23,12 +23,16 @@ project-jarvis/
 ├── src/
 │   ├── main.py                 # ponto de entrada (conversa)
 │   ├── agent/
-│   │   ├── settings.py         # .env (GROQ_API_KEY, GROQ_MODEL)
-│   │   ├── brain.py            # LLM LangChain ChatGroq, sem tools
+│   │   ├── settings.py         # .env (GROQ_*, POSTGRES_*, sessão, API_PORT e janela de voz)
+│   │   ├── brain.py            # LLM LangChain ChatGroq + histórico da sessão
 │   │   ├── instructions.md     # identidade e guardrails (não no Python)
-│   │   └── text_chat.py        # chat por texto no terminal (--text)
+│   │   └── text_chat.py        # chat por texto; sair encerra a sessão
+│   ├── api/                     # HTTP local e GET /health
+│   │   ├── app.py               # registro de rotas e JSON
+│   │   ├── server.py            # ThreadingHTTPServer em thread daemon
+│   │   └── routers/health.py    # estado agregado de Postgres e Groq
 │   ├── voice/
-│   │   ├── listen_repeat.py    # wake word + LLM + TTS + rosto
+│   │   ├── listen.py           # wake word + LLM + TTS + janela + rosto
 │   │   ├── mic.py              # microfone e VAD
 │   │   ├── stt.py              # Whisper
 │   │   ├── tts.py              # Piper
@@ -37,19 +41,28 @@ project-jarvis/
 │   ├── hardware/
 │   │   └── face/               # rosto: ABC, terminal, LCD (TODO)
 │   ├── vision/                 # câmera e percepção — ainda vazio
-│   ├── memory/                 # memória do agente — ainda vazio
+│   ├── memory/                 # sessões, mensagens e raciocínios (Postgres)
+│   │   ├── models.py
+│   │   ├── db.py
+│   │   └── conversation.py
 │   └── robot/                  # locomoção — ainda vazio
 ├── tests/
 ├── docs/                       # documentação viva das funcionalidades
 │   ├── README.md               # índice: funcionalidade → doc → código
 │   ├── padroes-de-implementacao.md
 │   ├── progresso.md
+│   ├── api/
 │   ├── spec/
 │   ├── cerebro-llm/
 │   ├── chat-texto/
-│   └── rosto-do-robo/
+│   ├── memoria-conversacional/
+│   ├── rosto-do-robo/
+│   └── voz/
 ├── spec/
 │   └── task-{slug}-{NNN}/      # plano + decisão da task (001, 002, …)
+├── alembic/                    # migrações do esquema
+├── alembic.ini
+├── docker-compose.yml          # Postgres de desenvolvimento
 ├── .vscode/
 │   └── launch.json             # debug no Cursor: chat texto e voz
 ├── .env.example
@@ -66,21 +79,27 @@ project-jarvis/
 | 3. Cérebro (LLM) | Feito | LangChain + Groq (`ChatGroq`); instruções em `instructions.md`; sem tools |
 | 4. Loop conversacional | Feito | Ouvir → pensar → falar, com estados do rosto |
 | Chat texto (debug) | Feito | `--text` no terminal; F5 no Cursor (Python 3.11) |
+| Memória conversacional | Feito | Sessão em Postgres; histórico no prompt; Alembic + docker-compose |
+| API HTTP / healthcheck | Feito | `GET /health` local agrega Postgres e Groq |
+| Raciocínio Groq | Feito | `generate_reply` devolve `Reply`; `--text` mostra o raciocínio; tabela `reasonings` |
+| Janela de conversa por voz | Feito | Depois do TTS, escuta sem wake word (`CONVERSATION_WINDOW_SECONDS`, default 15s de silêncio) |
 | 5. Locomoção | Pendente | Andar e reagir a comandos da LLM |
 | 6. Integração no hardware | Parcial | Rosto no terminal; LCD no Raspberry Pi ainda TODO |
 
 ## O que já funciona
 
-Depois da wake word **Jarvis**, o microfone captura a frase, o Whisper transcreve (PT ou EN), a LLM estrutura a resposta e o Piper fala essa resposta com a voz do mesmo idioma.
+Depois da wake word **Jarvis**, o microfone captura a frase, o Whisper transcreve (PT ou EN), a LLM estrutura a resposta e o Piper fala essa resposta com a voz do mesmo idioma. Depois do TTS abre-se uma janela de escuta: a pessoa pode continuar sem dizer **Jarvis** de novo, até `CONVERSATION_WINDOW_SECONDS` de silêncio contínuo (default 15).
 
 - `speak(text, language=None)` — sintetiza e toca
 - `transcribe(audio)` — devolve `(texto, idioma)`
-- `generate_reply(text, language)` — LLM (LangChain / Groq), sem tools; identidade e guardrails em `src/agent/instructions.md`, não no Python
-- `run_listen_repeat()` — loop: acordar → ouvir → pensar → falar
-- `run_text_chat(language="pt")` — chat por texto no terminal (`--text`), sem microfone, Whisper ou Piper
-- Rosto: Sleeping → Listening → Thinking → Answering → Sleeping (mock no terminal; só no loop de voz)
+- `generate_reply(text, language)` — devolve `Reply(spoken, reasoning)`; LLM (LangChain / Groq), sem tools; identidade e guardrails em `src/agent/instructions.md`; histórico da sessão ativa entra no prompt (só `messages`, sem raciocínio)
+- `run_listen()` — loop: acordar → ouvir → pensar → falar (`spoken` só) → janela pós-TTS (sem wake word)
+- `run_text_chat(language="pt")` — chat por texto no terminal (`--text`), sem microfone, Whisper ou Piper; se houver raciocínio, imprime o bloco `Raciocínio:` antes da linha do Jarvis; `sair` / `quit` / `exit` encerram a sessão ativa
+- Sessão em Postgres: uma ativa por vez, expira por inatividade (`SESSION_IDLE_MINUTES`, default 10); voz e texto compartilham; raciocínio da assistant em `reasonings` (1:1 opcional)
+- `GET /health` em `127.0.0.1:API_PORT` — 200 somente quando Postgres e Groq estão disponíveis; caso contrário, 503 com o estado de cada dependência
+- Rosto: Sleeping → Listening → Thinking → Answering → Listening (janela) → Sleeping (mock no terminal; só no loop de voz)
 
-Dá para falar tudo numa frase (`Jarvis olá, tudo bem?`) ou em duas (`Jarvis` … `olá, tudo bem?`).
+Dá para falar tudo numa frase (`Jarvis olá, tudo bem?`) ou em duas (`Jarvis` … `olá, tudo bem?`). Na janela, a fala segue sem wake word.
 
 Vozes:
 
@@ -91,23 +110,31 @@ Vozes:
 
 Use **Python 3.11**. Neste repositório, `py` (sem versão) aponta para o 3.14, que não tem as dependências.
 
-1. Copie `.env.example` para `.env` e preencha `GROQ_API_KEY` (token em [console.groq.com/keys](https://console.groq.com/keys)). Ajuste `GROQ_MODEL` se quiser outro modelo da Groq.
-2. Instale e rode:
+1. Copie `.env.example` para `.env` e preencha `GROQ_API_KEY` (token em [console.groq.com/keys](https://console.groq.com/keys)) e as obrigatórias do Postgres (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`). Ajuste `GROQ_MODEL` se quiser outro modelo da Groq. Opcionais: `POSTGRES_HOST`, `POSTGRES_PORT`, `SESSION_IDLE_MINUTES` (default 10), `API_PORT` (default 8080), `CONVERSATION_WINDOW_SECONDS` (default 15; segundos de silêncio da janela de voz) e `DATABASE_URL` (vence só a montagem da URL; as três `POSTGRES_*` continuam obrigatórias na subida).
+2. Instale as dependências, suba o Postgres, aplique as migrações e rode — nessa ordem:
 
 ```powershell
 py -3.11 -m pip install -r requirements.txt
+docker compose up -d --wait
+alembic upgrade head
 py -3.11 src/main.py
 py -3.11 src/main.py --text
 py -3.11 src/main.py --text --lang en
 ```
 
-Sem `--text`, o loop de voz sobe (na primeira execução o Whisper `base` e a voz PT são baixados). Com `--text`, o chat no terminal usa o mesmo cérebro, sem áudio. Encerrar: `sair`, `quit`, `exit` ou Ctrl+C.
+Em outro terminal, consulte o healthcheck:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/health
+```
+
+Sem `--text`, o loop de voz sobe (na primeira execução o Whisper `base` e a voz PT são baixados). Com `--text`, o chat no terminal usa o mesmo cérebro, sem áudio. Nos dois modos, a API local sobe no mesmo processo antes do loop. Encerrar: `sair`, `quit`, `exit` (encerram a sessão ativa, se houver) ou Ctrl+C (não encerra a sessão).
 
 Para depurar no Cursor: **Python: Select Interpreter** → Python 3.11, depois F5 na configuração `Jarvis: chat texto` ou `Jarvis: voz` (`.vscode/launch.json`; console no terminal integrado para o `input()`).
 
 O cérebro lê `src/agent/instructions.md` na subida. Arquivo ausente ou vazio aborta com `RuntimeError` e a LLM não é chamada. Tom, limites e recusas mudam só nesse markdown.
 
-Dependências: `piper-tts`, `sounddevice`, `numpy`, `faster-whisper`, `python-dotenv`, `langchain-core`, `langchain-groq`.
+Dependências: `piper-tts`, `sounddevice`, `numpy`, `faster-whisper`, `python-dotenv`, `langchain-core`, `langchain-groq`, `sqlalchemy>=2.0`, `alembic`, `psycopg[binary]`. Docker com Compose v2 para o Postgres de desenvolvimento.
 
 Testes: `py -3.11 -m unittest discover -s tests -v`.
 
@@ -117,7 +144,12 @@ Testes: `py -3.11 -m unittest discover -s tests -v`.
 - **API do Piper 1.6.** Quem grava o WAV é `synthesize_wav()`.
 - **Idioma automático.** Whisper detecta PT/EN; o TTS escolhe a voz correspondente.
 - **`output.wav` é gerado.** Está no `.gitignore`.
-- **LLM remota, sem tools.** A chave e o modelo ficam no `.env`; o loop só chama `generate_reply` e fala o texto.
+- **LLM remota, sem tools.** A chave e o modelo ficam no `.env`; o loop chama `generate_reply` e fala só `Reply.spoken`.
+- **Memória em Postgres.** Sessões, mensagens e raciocínios via SQLAlchemy + Alembic; o banco de desenvolvimento sobe por `docker-compose.yml`, não é instalado na máquina.
+- **Raciocínio da Groq.** `include_reasoning` no `ChatGroq`; o `--text` mostra o raciocínio do turno; a tabela `reasonings` grava 1:1 com a mensagem `assistant` quando a Groq mandar.
+- **API HTTP local.** `src/api/` usa `http.server` da stdlib; `GET /health` agrega os pings de Postgres e Groq em `127.0.0.1:API_PORT`.
+- **Janela de conversa por voz.** Depois do TTS o microfone escuta sem wake word; `CONVERSATION_WINDOW_SECONDS` (default 15) conta só silêncio. Take curta zera o relógio somente na janela (`reset_start_timeout_on_short`).
+- **`POSTGRES_*` obrigatórias na subida.** Mesmo com `DATABASE_URL`, as três credenciais continuam exigidas; a URL só vence na montagem da conexão.
 - **Rosto no terminal.** O LCD no Raspberry Pi está stubado com TODO.
 - **Pasta por task.** Plano e decisão da task em `spec/task-{slug}-{NNN}/` na raiz (001, 002, …), congelados no tempo.
 - **Spec planeja, rock-it executa.** A spec grava plano, regra de negócio e arquitetura da task e para; código, testes e a documentação viva de `docs/` são do `/rock-it`.

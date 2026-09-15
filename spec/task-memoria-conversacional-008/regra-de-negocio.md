@@ -15,7 +15,7 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 - Cada fala da pessoa renova a última atividade da sessão. A resposta do Jarvis não renova: quem mantém a conversa viva é a pessoa.
 - Sessão aberta e ociosa além do tempo de expiração é encerrada quando a próxima fala procura por sessão ativa, com o encerramento datado na última atividade real — não no momento em que foi descoberta. Não há job periódico nem processo de fundo.
 - Mudar `SESSION_IDLE_MINUTES` não reabre sessão já encerrada nem encerra sessão já aberta: o novo valor vale a partir da próxima resolução.
-- `sair`, `quit` ou `exit` no modo `--text` encerram a sessão ativa antes de o processo terminar. Ctrl+C e EOF não encerram: a sessão fica aberta e expira sozinha.
+- `sair`, `quit` ou `exit` no modo `--text` localizam a sessão ativa com `get_active_session()` — sem criar sessão. Se existir (inclusive a aberta pela voz), encerram (`close_session`); se não, no-op. Ctrl+C e EOF não encerram: a sessão fica aberta e expira sozinha.
 - Reiniciar o processo não encerra a sessão. Se a pessoa voltar dentro do tempo de expiração, a conversa continua de onde parou, inclusive depois de um reboot do robô.
 - Voz e chat texto compartilham a sessão. O que foi dito por voz aparece no histórico do modo texto e vice-versa; o canal de entrada não separa a conversa.
 
@@ -58,19 +58,19 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 | Resposta da LLM | Groq | Mensagem `assistant` gravada | Postgres (`messages`) |
 | Sessão ativa e histórico | Postgres (`sessions`, `messages`) | Lista de mensagens do prompt | LLM na Groq |
 | Idioma (`pt` / `en`) | Whisper (voz) ou `--lang` (texto) | Idioma da mensagem e da sessão | Postgres e prompt |
-| `sair` / `quit` / `exit` | stdin | Encerramento da sessão | Postgres (`sessions.ended_at`) |
+| `sair` / `quit` / `exit` | stdin | `get_active_session()` → se UUID, `close_session`; senão no-op | Postgres (`sessions.ended_at`) |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `.env` (obrigatórias) | Credenciais do contêiner **e** da conexão da aplicação | Docker Compose e `src/memory/db.py` |
 | `POSTGRES_HOST`, `POSTGRES_PORT` | `.env` (opcionais: `localhost`, `5432`) | Endereço da conexão e porta publicada pelo contêiner | Docker Compose e `src/memory/db.py` |
-| `DATABASE_URL` | `.env` (opcional) | URL completa que substitui as variáveis acima | `src/memory/db.py` |
+| `DATABASE_URL` | `.env` (opcional) | URL usada na montagem da conexão; as `POSTGRES_*` obrigatórias continuam exigidas na subida | `src/memory/db.py` |
 | `SESSION_IDLE_MINUTES` | `.env` (opcional, default 10) | Corte de inatividade da consulta de sessão ativa | `resolve_session` |
 | `docker-compose.yml` | Raiz do repositório | Contêiner do Postgres com volume nomeado | Docker, na máquina de desenvolvimento |
 
 ## Exceções
 
-- `POSTGRES_USER`, `POSTGRES_PASSWORD` ou `POSTGRES_DB` ausente ou vazia: `RuntimeError` na subida, com instrução de copiar `.env.example`. O loop não começa e a LLM não é chamada — mesmo tratamento fail-closed de `GROQ_API_KEY` e `GROQ_MODEL`.
+- `POSTGRES_USER`, `POSTGRES_PASSWORD` ou `POSTGRES_DB` ausente ou vazia: `RuntimeError` na subida, com instrução de copiar `.env.example`. O loop não começa e a LLM não é chamada — mesmo com `DATABASE_URL` preenchida. Mesmo tratamento fail-closed de `GROQ_API_KEY` e `GROQ_MODEL`.
 - Mesma variável ausente no `docker compose up`: o Compose aborta antes de criar o contêiner, com a mensagem da própria variável. O banco nunca sobe com senha em branco.
 - `POSTGRES_PORT` com valor não inteiro ou menor ou igual a zero: `RuntimeError` na subida. Ausente cai em 5432.
-- Postgres inacessível na subida: `RuntimeError` antes do loop, com o erro de conexão. O caso comum é o contêiner não ter subido; o README documenta `docker compose up -d --wait`.
+- Postgres inacessível na subida: `assert_schema_up_to_date` captura `OperationalError` e relança `RuntimeError("Postgres inacessível: …")` antes do loop. O caso comum é o contêiner não ter subido; o README documenta `docker compose up -d --wait`.
 - `SESSION_IDLE_MINUTES` com valor não inteiro ou menor ou igual a zero: `RuntimeError` na subida, citando a variável e o valor recebido. Ausente ou vazia **não** é erro: cai no default de 10 minutos. A diferença em relação a `GROQ_API_KEY` é que existe um default seguro para um tempo de expiração e não existe para uma credencial.
 - Esquema desatualizado na subida: se a revisão aplicada no banco for diferente da última migração do repositório, `RuntimeError` instruindo a rodar `alembic upgrade head`. O programa nunca migra sozinho — banco de robô em campo não é lugar para alteração de esquema automática e silenciosa.
 - Falha do Postgres durante um turno: mensagem no terminal, o rosto volta a Sleeping, nada é falado e o loop aguarda a wake word de novo. É o mesmo tratamento que a falha da Groq já recebe. Não há operação em memória sem banco: sem persistência, não há conversa.
