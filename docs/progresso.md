@@ -269,9 +269,21 @@ Take curta demais descartada pelo VAD zera `waited_chunks` **somente na janela**
 
 Documentação viva criada em `docs/voz/` (wake word, STT, TTS e o loop com a janela). Cérebro, rosto, memória, chat texto e API atualizados. Decisão da task em `spec/task-conversacao-bidimensional-012/`.
 
+### Pipeline básico no GitHub Actions
+
+Pull request cujo base é `main` ou `develop` dispara o workflow `.github/workflows/ci.yml`: um job Ubuntu com Python 3.11 instala as dependências, faz o build (`compileall` em `src/`), roda todos os testes `unittest` via `xmlrunner` e publica o artifact `test-results` com o XML JUnit — inclusive quando os testes falham. `unittest-xml-reporting` entra só no pip do runner; `requirements.txt` não muda. pytest continua fora da stack. `test-results/` está no `.gitignore`. A branch remota `develop` ainda não existe; o YAML já a lista.
+
+O mesmo gate compileall + unittest passa a valer no GitHub, não só na máquina.
+
+Documentação viva em `docs/ci/`. Decisão da task em `spec/task-pipeline-github-actions-013/`.
+
+### Problemas e correções
+
+1. **Install dependencies vermelho no GitHub.** `requirements.txt` estava em UTF-16 LE (bytes nulos entre as letras). O pip do Ubuntu lê UTF-8 e falhou com `Invalid requirement: 'p\x00i\x00p\x00e\x00r\x00-\x00t\x00t\x00s\x00'`. No Windows o pip aceita o arquivo; o CI não. O conteúdo dos pacotes não mudou: o arquivo foi regravado em UTF-8.
+
 ## Estado atual
 
-Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", janela de conversa por voz após o TTS (`CONVERSATION_WINDOW_SECONDS`, timeout só de silêncio; take curta zera o relógio só na janela), LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar → janela, rosto mock no terminal (Listening durante a janela), chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento), API HTTP local com healthcheck agregado de Postgres e Groq, e raciocínio da Groq visível no `--text` e gravado em `reasonings`. Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
+Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", janela de conversa por voz após o TTS (`CONVERSATION_WINDOW_SECONDS`, timeout só de silêncio; take curta zera o relógio só na janela), LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar → janela, rosto mock no terminal (Listening durante a janela), chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento), API HTTP local com healthcheck agregado de Postgres e Groq, raciocínio da Groq visível no `--text` e gravado em `reasonings`, e pipeline CI no GitHub Actions (PR para `main`/`develop`: build + unittest + artifact XML). Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
 
 Pendente: locomoção, LCD no Raspberry Pi, memória vetorial (RAG).
 

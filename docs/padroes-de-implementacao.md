@@ -35,6 +35,8 @@ O Hugging Face Hub é fonte de artefatos STT/TTS, **não** provedor do cérebro.
 
 ## Comandos
 
+Localmente:
+
 ```powershell
 py -3.11 -m pip install -r requirements.txt
 docker compose up -d --wait
@@ -46,7 +48,14 @@ py -3.11 -m compileall src
 py -3.11 -m unittest discover -s tests -v
 ```
 
-`compileall` é o build deste repositório (Python puro, sem empacotamento): erro de sintaxe ou import quebrado bloqueia a etapa. Os testes são `unittest`; `pytest` não é dependência do projeto.
+No GitHub Actions (PR para `main` ou `develop`; Python 3.11 no runner Ubuntu):
+
+```
+python -m compileall src
+python -m xmlrunner discover -s tests -v -o test-results
+```
+
+O gate `compileall` + `unittest` vale na máquina e no GitHub. `compileall` é o build deste repositório (Python puro, sem empacotamento): erro de sintaxe ou bytecode impede os testes. Os testes são `unittest`; `pytest` não é dependência do projeto. O relatório JUnit XML é gerado só no runner (`unittest-xml-reporting` / `xmlrunner`), instalado no job — não entra em `requirements.txt`. `test-results/` está no `.gitignore`.
 
 ## Formato do plano
 
@@ -84,6 +93,8 @@ Gherkin: um `Scenario` por comportamento distinto. Não repetir o mesmo fluxo co
 
 Testes automatizados só quando houver necessidade real: lógica ramificada, contrato ou regressão. Sem rede nos testes — cliente de LLM, microfone e TTS entram mockados. Se não houver necessidade, dizer isso no plano em vez de criar teste vazio ou que só espelha o Gherkin sem assert útil.
 
+O mesmo `unittest discover` em `tests/` roda no GitHub Actions em pull request para `main` ou `develop`. O XML JUnit (`xmlrunner`) existe só no runner; localmente o comando continua sendo `unittest`, sem essa lib.
+
 ## Evitar
 
 - Spec implementar código, testes ou docs de `docs/` (isso é rock-it).
@@ -110,3 +121,6 @@ Testes automatizados só quando houver necessidade real: lógica ramificada, con
 | HTTP atual com stdlib `http.server` | O healthcheck local é um GET JSON e não justifica adicionar framework à stack |
 | `synthesize_wav()` no Piper | Na API 1.6 é quem grava o WAV |
 | `output.wav` no `.gitignore` | É arquivo gerado |
+| CI em PR para `main` e `develop` | O mesmo gate compileall + unittest vale no GitHub, não só na máquina |
+| `unittest-xml-reporting` só no runner | Relatório XML é necessidade do CI, não do robô em runtime; pytest continua fora |
+| `test-results/` no `.gitignore` | XML gerado localmente ou copiado do runner não é versionado |
