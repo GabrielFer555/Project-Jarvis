@@ -4,7 +4,7 @@ Robô conversacional que anda e usa uma LLM como cérebro de operações.
 
 O objetivo é um assistente físico: escuta, pensa, fala e se move. Cada etapa é construída e validada isoladamente antes de entrar no loop principal.
 
-Mapa das funcionalidades: [docs/](docs/README.md) — [API](docs/api/regra-de-negocio.md), [cérebro](docs/cerebro-llm/regra-de-negocio.md), [chat texto](docs/chat-texto/regra-de-negocio.md), [memória](docs/memoria-conversacional/regra-de-negocio.md), [rosto](docs/rosto-do-robo/regra-de-negocio.md), [spec](docs/spec/regra-de-negocio.md), [voz](docs/voz/regra-de-negocio.md). Padrões do projeto: [docs/padroes-de-implementacao.md](docs/padroes-de-implementacao.md). Histórico detalhado: [docs/progresso.md](docs/progresso.md). Plano e decisão de cada task: [spec/](spec/task-spec-docs-vivas-006/plano.md) (skill spec; a execução é `/rock-it`).
+Mapa das funcionalidades: [docs/](docs/README.md) — [API](docs/api/regra-de-negocio.md), [cérebro](docs/cerebro-llm/regra-de-negocio.md), [chat texto](docs/chat-texto/regra-de-negocio.md), [CI](docs/ci/regra-de-negocio.md), [memória](docs/memoria-conversacional/regra-de-negocio.md), [rosto](docs/rosto-do-robo/regra-de-negocio.md), [spec](docs/spec/regra-de-negocio.md), [voz](docs/voz/regra-de-negocio.md). Padrões do projeto: [docs/padroes-de-implementacao.md](docs/padroes-de-implementacao.md). Histórico detalhado: [docs/progresso.md](docs/progresso.md). Plano e decisão de cada task: [spec/](spec/task-spec-docs-vivas-006/plano.md) (skill spec; a execução é `/rock-it`).
 
 ## Visão
 
@@ -20,6 +20,9 @@ A LLM decide o que dizer e o que fazer. Voz e movimento são atuadores; microfon
 
 ```
 project-jarvis/
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # PR para main/develop: compileall + unittest + artifact XML
 ├── src/
 │   ├── main.py                 # ponto de entrada (conversa)
 │   ├── agent/
@@ -52,6 +55,7 @@ project-jarvis/
 │   ├── padroes-de-implementacao.md
 │   ├── progresso.md
 │   ├── api/
+│   ├── ci/                     # pipeline GitHub Actions
 │   ├── spec/
 │   ├── cerebro-llm/
 │   ├── chat-texto/
@@ -83,6 +87,7 @@ project-jarvis/
 | API HTTP / healthcheck | Feito | `GET /health` local agrega Postgres e Groq |
 | Raciocínio Groq | Feito | `generate_reply` devolve `Reply`; `--text` mostra o raciocínio; tabela `reasonings` |
 | Janela de conversa por voz | Feito | Depois do TTS, escuta sem wake word (`CONVERSATION_WINDOW_SECONDS`, default 15s de silêncio) |
+| CI GitHub Actions | Feito | PR para `main` ou `develop` dispara build + unittest + artifact XML |
 | 5. Locomoção | Pendente | Andar e reagir a comandos da LLM |
 | 6. Integração no hardware | Parcial | Rosto no terminal; LCD no Raspberry Pi ainda TODO |
 
@@ -136,7 +141,7 @@ O cérebro lê `src/agent/instructions.md` na subida. Arquivo ausente ou vazio a
 
 Dependências: `piper-tts`, `sounddevice`, `numpy`, `faster-whisper`, `python-dotenv`, `langchain-core`, `langchain-groq`, `sqlalchemy>=2.0`, `alembic`, `psycopg[binary]`. Docker com Compose v2 para o Postgres de desenvolvimento.
 
-Testes: `py -3.11 -m unittest discover -s tests -v`.
+Testes locais: `py -3.11 -m unittest discover -s tests -v`. Pull request para `main` ou `develop` dispara o workflow `.github/workflows/ci.yml`: build (`compileall`), unittest e artifact XML. `test-results/` está no `.gitignore`.
 
 ## Decisões e problemas já resolvidos
 

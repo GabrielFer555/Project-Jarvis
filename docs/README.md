@@ -11,6 +11,7 @@ A skill `spec` lê este índice antes de planejar, para decidir se a feature **a
 | API HTTP e healthcheck | [api/](api/regra-de-negocio.md) | `src/api/` |
 | Cérebro LLM | [cerebro-llm/](cerebro-llm/regra-de-negocio.md) | `src/agent/` |
 | Chat texto | [chat-texto/](chat-texto/regra-de-negocio.md) | `src/agent/text_chat.py` |
+| CI (GitHub Actions) | [ci/](ci/regra-de-negocio.md) | `.github/workflows/ci.yml` |
 | Memória conversacional | [memoria-conversacional/](memoria-conversacional/regra-de-negocio.md) | `src/memory/` |
 | Rosto do robô | [rosto-do-robo/](rosto-do-robo/regra-de-negocio.md) | `src/hardware/face/` |
 | Spec e execução de tasks | [spec/](spec/regra-de-negocio.md) | `.cursor/skills/spec/`, `.cursor/skills/rock-it/` |
