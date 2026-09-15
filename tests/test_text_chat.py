@@ -120,13 +120,12 @@ class MainRoutingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.events: list[str] = []
 
-        self.mock_voice = MagicMock()
-        self.mock_voice.run_listen_repeat.side_effect = lambda: self.events.append(
-            "flow"
+        listen = patch(
+            "main.run_listen",
+            side_effect=lambda: self.events.append("flow"),
         )
-        voice_modules = patch.dict(sys.modules, {"voice": self.mock_voice})
-        voice_modules.start()
-        self.addCleanup(voice_modules.stop)
+        self.mock_listen = listen.start()
+        self.addCleanup(listen.stop)
 
         text_chat = patch("main.run_text_chat")
         self.mock_text_chat = text_chat.start()
@@ -152,7 +151,7 @@ class MainRoutingTests(unittest.TestCase):
         self.assertEqual(self.events, ["load_settings", "start_api", "flow"])
         self.mock_load_settings.assert_called_once_with()
         self.mock_start_api.assert_called_once_with()
-        self.mock_voice.run_listen_repeat.assert_called_once_with()
+        self.mock_listen.assert_called_once_with()
         self.mock_text_chat.assert_not_called()
 
     def test_main_text_dispatches_chat_with_en(self) -> None:
@@ -161,7 +160,7 @@ class MainRoutingTests(unittest.TestCase):
         self.mock_load_settings.assert_called_once_with()
         self.mock_start_api.assert_called_once_with()
         self.mock_text_chat.assert_called_once_with(language="en")
-        self.mock_voice.run_listen_repeat.assert_not_called()
+        self.mock_listen.assert_not_called()
 
     def test_main_text_lang_en_passes_en(self) -> None:
         main.main(["--text", "--lang", "en"])
@@ -169,7 +168,7 @@ class MainRoutingTests(unittest.TestCase):
         self.mock_load_settings.assert_called_once_with()
         self.mock_start_api.assert_called_once_with()
         self.mock_text_chat.assert_called_once_with(language="en")
-        self.mock_voice.run_listen_repeat.assert_not_called()
+        self.mock_listen.assert_not_called()
 
 
 if __name__ == "__main__":

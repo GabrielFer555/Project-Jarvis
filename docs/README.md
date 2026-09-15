@@ -14,6 +14,7 @@ A skill `spec` lê este índice antes de planejar, para decidir se a feature **a
 | Memória conversacional | [memoria-conversacional/](memoria-conversacional/regra-de-negocio.md) | `src/memory/` |
 | Rosto do robô | [rosto-do-robo/](rosto-do-robo/regra-de-negocio.md) | `src/hardware/face/` |
 | Spec e execução de tasks | [spec/](spec/regra-de-negocio.md) | `.cursor/skills/spec/`, `.cursor/skills/rock-it/` |
+| Voz | [voz/](voz/regra-de-negocio.md) | `src/voice/` |
 
 Cada pasta tem `regra-de-negocio.md` (o que a funcionalidade faz e não faz) e `arquitetura.md` (componentes, fluxo, contratos, dependências e decisões).
 
@@ -30,7 +31,6 @@ Código que existe mas não tem pasta aqui. Uma feature que mexa nestas áreas c
 
 | Área | Código | Situação |
 | --- | --- | --- |
-| Voz (wake word, STT, TTS) | `src/voice/` | Funciona; descrita só no README e no progresso |
 | Locomoção | `src/robot/` | Pacote reservado, ainda vazio |
 | Visão | `src/vision/` | Pacote reservado, ainda vazio |
 

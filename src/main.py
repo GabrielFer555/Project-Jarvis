@@ -3,6 +3,9 @@ import argparse
 from agent.settings import load_settings
 from agent.text_chat import run_text_chat
 from api import start_api
+from voice import run_listen
+import logging
+logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -18,13 +21,15 @@ def main(argv: list[str] | None = None) -> None:
         run_text_chat(language=args.lang)
         return
 
-    from voice import run_listen_repeat
 
-    run_listen_repeat()
+    run_listen()
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nEncerrado.")
+        logger.info("\nEncerrado.")
+    except Exception as e:
+        logger.error(f"Erro: {e}")
+        raise

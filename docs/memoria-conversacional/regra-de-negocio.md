@@ -21,7 +21,7 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 
 ### Mensagens
 
-- Toda fala da pessoa e toda resposta do Jarvis são gravadas **no instante em que acontecem**, com papel (`user` ou `assistant`), ordem dentro da sessão e idioma.
+- Toda fala da pessoa e toda resposta do Jarvis são gravadas **no instante em que acontecem**, com papel (`user` ou `assistant`), ordem dentro da sessão e idioma. Na voz, a transcrição gravada como `user` é tanto a frase depois da wake word quanto a fala na janela, sem wake word.
 - A fala da pessoa é gravada e **comitada antes** de a LLM ser chamada. Se a chamada falhar, a fala permanece registrada sem resposta correspondente; nenhum placeholder é gravado no lugar da resposta que não veio; também não nasce linha em `reasonings`.
 - A mensagem `assistant` em `messages.content` é só o texto falável (`spoken`). O raciocínio da Groq, quando existir, vai para a tabela `reasonings`, 1:1 com essa mensagem via `message_id` único. Fala `user` nunca tem linha em `reasonings`. Se a Groq não mandar raciocínio, a assistant é gravada sem linha nessa tabela.
 - A assistant e o eventual `reasonings` entram no **mesmo commit**.
@@ -48,7 +48,7 @@ A sessão é a unidade de conversa: nasce na primeira fala e morre por inativida
 
 | Entrada | Origem | Saída | Destino |
 | --- | --- | --- | --- |
-| Frase depois da wake word | STT (Whisper) | Mensagem `user` gravada | Postgres (`messages`) |
+| Frase depois da wake word, ou fala na janela sem wake word | STT (Whisper) | Mensagem `user` gravada | Postgres (`messages`) |
 | Linha digitada (modo `--text`) | stdin | Mensagem `user` gravada | Postgres (`messages`) |
 | Resposta da LLM | Groq | Mensagem `assistant` gravada (`spoken`) | Postgres (`messages`) |
 | Raciocínio da LLM (se houver) | Groq | Linha 1:1 com a mensagem `assistant` | Postgres (`reasonings`) |

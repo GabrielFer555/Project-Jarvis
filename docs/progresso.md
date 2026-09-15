@@ -255,11 +255,25 @@ Gate da etapa: `compileall` concluído e 56 testes `unittest` aprovados.
 
 1. **Gate da Etapa 1 vermelho por `--lang`.** Um teste pré-existente esperava o default `pt` do chat texto. O argparse do `main.py` já estava com default `en` (decisão do usuário, fora do RF desta task). O teste foi alinhado ao default `en`; o default documentado do `run_text_chat(language="pt")` e das docs de chat texto não mudou.
 
+## 2026-09-14
+
+### Janela de conversa por voz
+
+Depois do Piper, o loop de voz abre uma janela de escuta. `CONVERSATION_WINDOW_SECONDS` (default 15) conta **somente silêncio contínuo**: se a pessoa começar a falar, o timeout não corta a frase. Fala útil na janela vai à LLM **sem** nova wake word. Só o silêncio pelo valor da env (ou transcrição vazia) fecha a janela e volta a exigir **Jarvis**.
+
+O módulo do loop passou de `listen_repeat.py` / `run_listen_repeat()` para `listen.py` / `run_listen()`. Sem alias do nome antigo.
+
+Durante a janela o rosto fica **Listening**; Sleeping quando a janela fecha ou a LLM falha. Fechar a janela **não** encerra a sessão em Postgres.
+
+Take curta demais descartada pelo VAD zera `waited_chunks` **somente na janela**, via `reset_start_timeout_on_short=True` em `record_utterance` (default `False`). O caminho **Pode falar.** (`start_timeout=6.0`) não passa o flag: o prazo conta desde o início; take curta não devolve tempo. O plano da etapa 2 falava em zerar o relógio no VAD de forma global — isso não entrou no código.
+
+Documentação viva criada em `docs/voz/` (wake word, STT, TTS e o loop com a janela). Cérebro, rosto, memória, chat texto e API atualizados. Decisão da task em `spec/task-conversacao-bidimensional-012/`.
+
 ## Estado atual
 
-Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar, rosto mock no terminal, chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento), API HTTP local com healthcheck agregado de Postgres e Groq, e raciocínio da Groq visível no `--text` e gravado em `reasonings`. Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
+Feito: TTS offline (EN/PT), STT com Whisper, wake word "Jarvis", janela de conversa por voz após o TTS (`CONVERSATION_WINDOW_SECONDS`, timeout só de silêncio; take curta zera o relógio só na janela), LLM via LangChain/Groq (`ChatGroq`, sem tools), credenciais `GROQ_API_KEY` / `GROQ_MODEL`, instruções e guardrails do cérebro em `src/agent/instructions.md` (não no Python), loop ouvir → pensar → falar → janela, rosto mock no terminal (Listening durante a janela), chat por texto (`--text`) e debug no Cursor (Python 3.11 + F5), memória conversacional por sessão em Postgres (SQLAlchemy + Alembic; `docker-compose.yml` para o banco de desenvolvimento), API HTTP local com healthcheck agregado de Postgres e Groq, e raciocínio da Groq visível no `--text` e gravado em `reasonings`. Processo de task com documentação viva em `docs/` e decisão registrada por task em `spec/`.
 
-Pendente: locomoção, LCD no Raspberry Pi, memória vetorial (RAG). `src/voice/` funciona mas ainda não tem pasta em `docs/`.
+Pendente: locomoção, LCD no Raspberry Pi, memória vetorial (RAG).
 
 ## Próximo passo
 

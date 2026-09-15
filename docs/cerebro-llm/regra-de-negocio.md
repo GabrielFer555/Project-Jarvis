@@ -2,11 +2,11 @@
 
 ## Objetivo
 
-Depois da wake word **Jarvis**, o robô deixa de repetir a frase. A transcrição vai para uma LLM na **Groq** (via LangChain), que estrutura uma resposta breve; o Piper fala essa resposta em voz alta. A mesma LLM também aceita texto digitado no modo `--text`; nesse canal a resposta falável e, se houver, o raciocínio interno são impressos no terminal, sem TTS.
+A wake word **Jarvis** inicia a conversa por voz. A transcrição — da primeira frase ou de um follow-up na janela, sem nova wake word — vai para uma LLM na **Groq** (via LangChain), que estrutura uma resposta breve; o Piper fala essa resposta em voz alta. A mesma LLM também aceita texto digitado no modo `--text`; nesse canal a resposta falável e, se houver, o raciocínio interno são impressos no terminal, sem TTS.
 
 ## Comportamento
 
-- O microfone e a wake word continuam iguais: `Jarvis …` numa frase só, ou `Jarvis` e a pergunta em seguida.
+- A wake word **Jarvis** inicia a conversa por voz (`Jarvis …` numa frase só, ou `Jarvis` e a pergunta em seguida). Turnos seguintes na janela chamam a mesma `generate_reply` sem exigir wake word.
 - A LLM recebe o texto da pessoa e o idioma: na voz, a transcrição do Whisper e o idioma detectado; no modo `--text`, a linha digitada e o `--lang`. Responde em no máximo duas frases, no mesmo idioma, prontas para TTS (na voz) ou para o terminal (no modo texto).
 - Identidade, tom, limites e recusas vivem em `src/agent/instructions.md`, não em string no Python. Mudar o comportamento do Jarvis é editar esse markdown.
 - A fala da pessoa entra no prompt como **dado**, entre `<<<` e `>>>`. Ordem embutida na fala não sobrepõe as instruções, não revela o prompt e não troca o papel do assistente.
@@ -15,13 +15,13 @@ Depois da wake word **Jarvis**, o robô deixa de repetir a frase. A transcriçã
 - A chave e o modelo vêm de `.env` (`GROQ_API_KEY`, `GROQ_MODEL`). Sem chave ou sem modelo, o programa não inicia o loop.
 - O `GET /health` usa `ping_groq()` para validar conexão e autenticação com a mesma `GROQ_API_KEY`, por GET em `/openai/v1/models`. Essa checagem não chama `ChatGroq.invoke`, não gasta completion, não verifica `GROQ_MODEL` e não altera o turno de `generate_reply`.
 - O que é falado (Piper e `Reply.spoken`) é só o conteúdo da mensagem da LLM (`AIMessage.content`), sem raciocínio interno nem a representação crua do objeto LangChain. O raciocínio, quando a Groq manda, é extraído de `additional_kwargs["reasoning_content"]`, visível no `--text` e gravado em `reasonings`; não entra no texto falado nem na janela do prompt.
-- Se a chamada à LLM falhar, o erro vai para o terminal; o rosto volta a Sleeping e o robô espera **Jarvis** de novo, sem falar.
+- Se a chamada à LLM falhar (no primeiro turno ou no follow-up da janela), o erro vai para o terminal; o rosto volta a Sleeping, a janela não reabre e o robô espera **Jarvis** de novo, sem falar.
 
 ## Entradas e saídas
 
 | Entrada | Origem | Saída | Destino |
 | --- | --- | --- | --- |
-| Frase depois da wake word | STT (Whisper) | `Reply.spoken` | TTS (Piper) |
+| Frase depois da wake word, ou fala na janela sem wake word | STT (Whisper) | `Reply.spoken` | TTS (Piper) |
 | Linha digitada (modo `--text`) | stdin | `Reply.spoken` e, se houver, `Reply.reasoning` | stdout (sem Piper); bloco `Raciocínio:` antes da linha do Jarvis |
 | `AIMessage.content` | Groq / LangChain | `Reply.spoken` | TTS, stdout `Jarvis [lang]:`, Postgres `messages` (assistant) |
 | `additional_kwargs["reasoning_content"]` | Groq via LangChain | `Reply.reasoning` | stdout do `--text`; Postgres `reasonings` (se houver) |

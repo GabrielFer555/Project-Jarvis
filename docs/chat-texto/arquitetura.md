@@ -32,7 +32,7 @@ load_settings()
 start_api()              # bind síncrono; serve_forever em daemon
         ├── falha ──────► exceção; nenhum loop começa
         │
-        ├── sem --text ─► import voice ─► run_listen_repeat()
+        ├── sem --text ─► import voice ─► run_listen()
         │
         └── --text ─────► run_text_chat()
                                 │

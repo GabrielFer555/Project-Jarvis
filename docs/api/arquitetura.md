@@ -26,7 +26,7 @@ start_api() ── bind falhou ──► exceção; loop não começa
       └── serve_forever() em thread daemon
       │
       ├── --text ─► run_text_chat() ─► init_brain() ─► loop
-      └── voz    ─► run_listen_repeat() ─► init_brain() ─► loop
+      └── voz    ─► run_listen() ─► init_brain() ─► loop
 
 GET /health
       ├── memory.db.ping() ─────► postgres up|down

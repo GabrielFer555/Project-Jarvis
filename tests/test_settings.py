@@ -43,6 +43,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.postgres_port, 5432)
         self.assertEqual(settings.session_idle_minutes, 10)
         self.assertEqual(settings.api_port, 8080)
+        self.assertEqual(settings.conversation_window_seconds, 15)
         self.assertIsNone(settings.database_url)
 
     def test_missing_postgres_credentials_raise(self) -> None:
@@ -69,6 +70,9 @@ class SettingsTests(unittest.TestCase):
             ("SESSION_IDLE_MINUTES", "abc"),
             ("SESSION_IDLE_MINUTES", "0"),
             ("SESSION_IDLE_MINUTES", "-1"),
+            ("CONVERSATION_WINDOW_SECONDS", "abc"),
+            ("CONVERSATION_WINDOW_SECONDS", "0"),
+            ("CONVERSATION_WINDOW_SECONDS", "-1"),
         )
         for name, value in cases:
             with self.subTest(name=name, value=value):
@@ -86,6 +90,31 @@ class SettingsTests(unittest.TestCase):
                 message = str(ctx.exception)
                 self.assertIn(name, message)
                 self.assertIn(value, message)
+
+    def test_conversation_window_seconds_defaults_to_15_when_absent(self) -> None:
+        env = {
+            **_POSTGRES,
+            "GROQ_API_KEY": "gsk_test",
+            "GROQ_MODEL": "openai/gpt-oss-20b",
+        }
+        with patch("agent.settings.load_dotenv"), patch.dict(
+            os.environ, env, clear=True
+        ):
+            settings = load_settings()
+        self.assertEqual(settings.conversation_window_seconds, 15)
+
+    def test_conversation_window_seconds_custom_positive(self) -> None:
+        env = {
+            **_POSTGRES,
+            "GROQ_API_KEY": "gsk_test",
+            "GROQ_MODEL": "openai/gpt-oss-20b",
+            "CONVERSATION_WINDOW_SECONDS": "20",
+        }
+        with patch("agent.settings.load_dotenv"), patch.dict(
+            os.environ, env, clear=True
+        ):
+            settings = load_settings()
+        self.assertEqual(settings.conversation_window_seconds, 20)
 
     def test_api_port_defaults_to_8080_when_absent(self) -> None:
         env = {

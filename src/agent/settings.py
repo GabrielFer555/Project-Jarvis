@@ -19,6 +19,7 @@ class Settings:
     database_url: str | None = None
     session_idle_minutes: int = 10
     api_port: int = 8080
+    conversation_window_seconds: int = 15
 
 
 def _require(name: str, hint: str) -> str:
@@ -65,6 +66,9 @@ def load_settings() -> Settings:
         "SESSION_IDLE_MINUTES", os.getenv("SESSION_IDLE_MINUTES"), 10
     )
     api_port = _positive_int("API_PORT", os.getenv("API_PORT"), 8080)
+    conversation_window_seconds = _positive_int(
+        "CONVERSATION_WINDOW_SECONDS", os.getenv("CONVERSATION_WINDOW_SECONDS"), 15
+    )
     os.environ.setdefault("GROQ_API_KEY", token)
     return Settings(
         token=token,
@@ -77,4 +81,5 @@ def load_settings() -> Settings:
         database_url=database_url,
         session_idle_minutes=session_idle_minutes,
         api_port=api_port,
+        conversation_window_seconds=conversation_window_seconds,
     )

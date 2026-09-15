@@ -10,7 +10,7 @@ microfone → STT → LLM (cérebro) → TTS → alto-falante
                   memória (Postgres)
 ```
 
-O pacote `src/memory/` grava e carrega o histórico. Nem `src/voice/listen_repeat.py` nem `src/agent/text_chat.py` conhecem o banco: os dois chamam `generate_reply(texto, idioma)` e recebem `Reply`. Quem grava e quem carrega o histórico é o cérebro.
+O pacote `src/memory/` grava e carrega o histórico. Nem `src/voice/listen.py` nem `src/agent/text_chat.py` conhecem o banco: os dois chamam `generate_reply(texto, idioma)` e recebem `Reply`. Quem grava e quem carrega o histórico é o cérebro.
 
 A única exceção é o encerramento manual da sessão: o chat texto localiza a ativa com `get_active_session()` e, se houver, chama `close_session`.
 
@@ -30,7 +30,7 @@ Nada fora de `src/memory/` toca SQLAlchemy. O resto do projeto vê funções que
 | Recorte da janela | `src/memory/conversation.py` | `build_window`: função pura, sem ORM e sem SQL |
 | Cérebro | `src/agent/brain.py` | Montar a lista de mensagens (system + janela), invocar o `ChatGroq` e devolver `Reply` |
 | Instruções | `src/agent/instructions.md` | Identidade e guardrails, inalterados por esta funcionalidade |
-| Loop de voz | `src/voice/listen_repeat.py` | Chama `generate_reply`; print e Piper só com `reply.spoken` |
+| Loop de voz | `src/voice/listen.py` | Chama `generate_reply`; print e Piper só com `reply.spoken` |
 | Loop de texto | `src/agent/text_chat.py` | Lê `Reply`; bloco `Raciocínio:` opcional; em `sair` / `quit` / `exit` usa `get_active_session` e, se houver, `close_session` |
 | Testes | `tests/test_brain.py`, `tests/test_memory.py` | Contrato do prompt como lista de mensagens e recorte da janela, com banco e LLM mockados |
 

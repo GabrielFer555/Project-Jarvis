@@ -23,7 +23,7 @@ A wake word e o VAD permanecem em `src/voice/`. Só o trecho "o que falar" muda:
 | Instruções | `src/agent/instructions.md` | Identidade e guardrails, em português, fora do Python |
 | Memória | `src/memory/` | Sessão ativa, gravação e janela do histórico |
 | Cérebro | `src/agent/brain.py` | Ler instruções, montar a lista de mensagens, invocar `ChatGroq` com `include_reasoning`, devolver `Reply` e expor `ping_groq()` para o healthcheck |
-| Loop de voz | `src/voice/listen_repeat.py` | Acordar → ouvir → pensar → falar |
+| Loop de voz | `src/voice/listen.py` | Acordar → ouvir → pensar → falar → janela pós-TTS |
 | Loop de texto | `src/agent/text_chat.py` | Segundo chamador: stdin → `generate_reply` → stdout |
 | Testes | `tests/test_settings.py`, `tests/test_brain.py`, `tests/test_memory.py` | Env, prompt como lista e recorte da janela, com `ChatGroq` e memória mockados |
 
@@ -35,10 +35,10 @@ A wake word e o VAD permanecem em `src/voice/`. Só o trecho "o que falar" muda:
         ▼
 init_brain()  →  instructions.md + ChatGroq + assert_schema_up_to_date()
         │
-wake word "Jarvis" + frase
+wake word "Jarvis" + frase  (inicia); follow-up na janela sem wake word
         │
         ▼
-generate_reply(texto, idioma)     # voz: listen_repeat; texto: text_chat
+generate_reply(texto, idioma)     # voz: listen.py; texto: text_chat
         │
         ├── resolve_session → append user (commit, sem reasoning) → load_window
         ├── invoke([SystemMessage(instruções), *janela])
@@ -49,6 +49,7 @@ generate_reply(texto, idioma)     # voz: listen_repeat; texto: text_chat
         └── return Reply(spoken, reasoning)
         │
         ├── voz   → Piper speak(reply.spoken, language)
+        │           └── ramo pós-TTS: janela em listen.py (sem wake word)
         └── texto → [se reasoning] bloco Raciocínio: ; depois Jarvis [lang]: spoken
 
 GET /health → ping_groq()
